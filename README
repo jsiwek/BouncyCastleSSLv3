@@ -1,0 +1,3 @@
+# BouncyCastle was checked out like:
+export CVSROOT=:pserver:anonymous@cvs.bouncycastle.org:/home/users/bouncy/cvsroot
+cvs co java

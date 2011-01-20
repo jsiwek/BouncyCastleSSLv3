@@ -1,0 +1,23 @@
+/AttributeTypeAndValue.java/1.2/Mon Jun 21 00:28:55 2010//
+/CRMFObjectIdentifiers.java/1.2/Thu Jul  1 07:02:30 2010//
+/CertId.java/1.1/Thu Jun 28 05:52:29 2007//
+/CertReqMessages.java/1.3/Thu Jul 22 02:39:57 2010//
+/CertReqMsg.java/1.5/Fri Jul 23 01:36:59 2010//
+/CertRequest.java/1.4/Thu Jul  1 07:02:30 2010//
+/CertTemplate.java/1.5/Wed Nov 24 01:15:31 2010//
+/CertTemplateBuilder.java/1.4/Wed Nov 24 01:15:31 2010//
+/Controls.java/1.3/Wed Sep  1 02:23:35 2010//
+/EncKeyWithID.java/1.2/Thu Aug 26 08:04:19 2010//
+/EncryptedKey.java/1.3/Thu Aug 26 08:04:19 2010//
+/EncryptedValue.java/1.4/Wed Aug 25 03:48:41 2010//
+/OptionalValidity.java/1.4/Thu Mar 12 22:33:30 2009//
+/PKIArchiveOptions.java/1.3/Thu Aug 26 08:04:19 2010//
+/PKIPublicationInfo.java/1.1/Thu Jun 28 05:52:29 2007//
+/PKMACValue.java/1.2/Thu Aug 19 07:27:00 2010//
+/POPOPrivKey.java/1.3/Tue Aug 24 05:24:22 2010//
+/POPOSigningKey.java/1.3/Mon Jun 21 00:28:55 2010//
+/POPOSigningKeyInput.java/1.3/Wed Jul 14 05:52:28 2010//
+/ProofOfPossession.java/1.5/Thu Dec  9 21:29:42 2010//
+/SinglePubInfo.java/1.1/Thu Jun 28 05:52:29 2007//
+/SubsequentMessage.java/1.1/Thu Aug 19 07:27:00 2010//
+D
