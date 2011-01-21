@@ -1,0 +1,28 @@
+#!/bin/sh -
+#
+# Build script.
+# A successful build will place a lcrypto-${version}.jar in out/
+
+sourcedir="$( cd "$( dirname "$0" )" && pwd )"
+
+junitJarPath=${sourcedir}/deps/junit-4.8.2.jar
+
+CLASSPATH=${junitJarPath}:$CLASSPATH
+export CLASSPATH
+
+dottedjdk="jdk1.6"
+jdk=`echo ${dottedjdk} | sed 's/\.//'`
+buildxml=${jdk}.xml
+
+cd java/crypto
+version=`cat bc-build.properties | sed -n 's/release.suffix: //p' | cut -d . -f 2`
+jarname=lcrypto-${version}.jar
+
+ant -f ${buildxml} build-lw
+
+if [ $? -eq 0 ]; then
+    cd build/artifacts/${dottedjdk}/lcrypto-${jdk}-${version}/classes
+    jar -cf ${jarname} .
+    mkdir -p ${sourcedir}/out
+    mv ${jarname} ${sourcedir}/out
+fi
