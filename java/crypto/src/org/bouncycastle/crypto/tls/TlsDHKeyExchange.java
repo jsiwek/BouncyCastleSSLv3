@@ -32,9 +32,9 @@ class TlsDHKeyExchange implements TlsKeyExchange
     protected static final BigInteger ONE = BigInteger.valueOf(1);
     protected static final BigInteger TWO = BigInteger.valueOf(2);
 
-    protected TlsClientContext context;
+    protected TlsProtocolHandler handler;
     protected CertificateVerifyer verifyer;
-    protected int keyExchange;
+    protected short keyExchange;
     protected TlsSigner tlsSigner;
 
     protected AsymmetricKeyParameter serverPublicKey = null;
@@ -42,25 +42,25 @@ class TlsDHKeyExchange implements TlsKeyExchange
     protected DHPublicKeyParameters dhAgreeServerPublicKey = null;
     protected DHPrivateKeyParameters dhAgreeClientPrivateKey = null;
 
-    TlsDHKeyExchange(TlsClientContext context, CertificateVerifyer verifyer, int keyExchange)
+    TlsDHKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer, short keyExchange)
     {
         switch (keyExchange)
         {
-            case KeyExchangeAlgorithm.DH_RSA:
-            case KeyExchangeAlgorithm.DH_DSS:
+            case TlsKeyExchange.KE_DH_RSA:
+            case TlsKeyExchange.KE_DH_DSS:
                 this.tlsSigner = null;
                 break;
-            case KeyExchangeAlgorithm.DHE_RSA:
+            case TlsKeyExchange.KE_DHE_RSA:
                 this.tlsSigner = new TlsRSASigner();
                 break;
-            case KeyExchangeAlgorithm.DHE_DSS:
+            case TlsKeyExchange.KE_DHE_DSS:
                 this.tlsSigner = new TlsDSSSigner();
                 break;
             default:
                 throw new IllegalArgumentException("unsupported key exchange algorithm");
         }
 
-        this.context = context;
+        this.handler = handler;
         this.verifyer = verifyer;
         this.keyExchange = keyExchange;
     }
@@ -101,7 +101,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
 
         switch (this.keyExchange)
         {
-            case KeyExchangeAlgorithm.DH_DSS:
+            case TlsKeyExchange.KE_DH_DSS:
                 if (!(this.serverPublicKey instanceof DHPublicKeyParameters))
                 {
                     throw new TlsFatalAlert(AlertDescription.certificate_unknown);
@@ -111,7 +111,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
 //                x509Cert.getSignatureAlgorithm();
                 this.dhAgreeServerPublicKey = validateDHPublicKey((DHPublicKeyParameters)this.serverPublicKey);
                 break;
-            case KeyExchangeAlgorithm.DH_RSA:
+            case TlsKeyExchange.KE_DH_RSA:
                 if (!(this.serverPublicKey instanceof DHPublicKeyParameters))
                 {
                     throw new TlsFatalAlert(AlertDescription.certificate_unknown);
@@ -121,7 +121,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
 //              x509Cert.getSignatureAlgorithm();
                 this.dhAgreeServerPublicKey = validateDHPublicKey((DHPublicKeyParameters)this.serverPublicKey);
                 break;
-            case KeyExchangeAlgorithm.DHE_RSA:
+            case TlsKeyExchange.KE_DHE_RSA:
                 if (!(this.serverPublicKey instanceof RSAKeyParameters))
                 {
                     throw new TlsFatalAlert(AlertDescription.certificate_unknown);
@@ -129,7 +129,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
                 validateKeyUsage(x509Cert, KeyUsage.digitalSignature);
                 // TODO Validate RSA public key
                 break;
-            case KeyExchangeAlgorithm.DHE_DSS:
+            case TlsKeyExchange.KE_DHE_DSS:
                 if (!(this.serverPublicKey instanceof DSAPublicKeyParameters))
                 {
                     throw new TlsFatalAlert(AlertDescription.certificate_unknown);
@@ -155,7 +155,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
         // OK
     }
 
-    public void processServerKeyExchange(InputStream is)
+    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
         throws IOException
     {
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
@@ -163,7 +163,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
 
     public void generateClientKeyExchange(OutputStream os) throws IOException
     {
-        // TODO 'dhAgreeClientPrivateKey' should be set during client auth if a *_fixed_dh
+        // TODO 'dhAgreeClientKeyPair' should be set during client auth if a *_fixed_dh
         // client cert was sent (and that cert's parameters must match the server cert)
 
         /*
@@ -188,7 +188,8 @@ class TlsDHKeyExchange implements TlsKeyExchange
 
     protected boolean areCompatibleParameters(DHParameters a, DHParameters b)
     {
-        return a.getP().equals(b.getP()) && a.getG().equals(b.getG());
+        return a.getP().equals(b.getP())
+            && a.getG().equals(b.getG());
     }
 
     protected byte[] calculateDHBasicAgreement(DHPublicKeyParameters publicKey,
@@ -203,12 +204,11 @@ class TlsDHKeyExchange implements TlsKeyExchange
     protected AsymmetricCipherKeyPair generateDHKeyPair(DHParameters dhParams)
     {
         DHBasicKeyPairGenerator dhGen = new DHBasicKeyPairGenerator();
-        dhGen.init(new DHKeyGenerationParameters(context.getSecureRandom(), dhParams));
+        dhGen.init(new DHKeyGenerationParameters(handler.getRandom(), dhParams));
         return dhGen.generateKeyPair();
     }
 
-    protected void generateEphemeralClientKeyExchange(DHParameters dhParams, OutputStream os)
-        throws IOException
+    protected void generateEphemeralClientKeyExchange(DHParameters dhParams, OutputStream os) throws IOException
     {
         AsymmetricCipherKeyPair dhAgreeClientKeyPair = generateDHKeyPair(dhParams);
         this.dhAgreeClientPrivateKey = (DHPrivateKeyParameters)dhAgreeClientKeyPair.getPrivate();
@@ -219,13 +219,12 @@ class TlsDHKeyExchange implements TlsKeyExchange
         TlsUtils.writeOpaque16(keData, os);
     }
 
-    protected void validateKeyUsage(X509CertificateStructure c, int keyUsageBits)
-        throws IOException
+    protected void validateKeyUsage(X509CertificateStructure c, int keyUsageBits) throws IOException
     {
         X509Extensions exts = c.getTBSCertificate().getExtensions();
         if (exts != null)
         {
-            X509Extension ext = exts.getExtension(X509Extension.keyUsage);
+            X509Extension ext = exts.getExtension(X509Extensions.KeyUsage);
             if (ext != null)
             {
                 DERBitString ku = KeyUsage.getInstance(ext);
@@ -238,8 +237,7 @@ class TlsDHKeyExchange implements TlsKeyExchange
         }
     }
 
-    protected DHPublicKeyParameters validateDHPublicKey(DHPublicKeyParameters key)
-        throws IOException
+    protected DHPublicKeyParameters validateDHPublicKey(DHPublicKeyParameters key) throws IOException
     {
         BigInteger Y = key.getY();
         DHParameters params = key.getParameters();

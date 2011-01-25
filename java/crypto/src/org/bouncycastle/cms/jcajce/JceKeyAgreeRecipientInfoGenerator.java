@@ -84,7 +84,7 @@ public class JceKeyAgreeRecipientInfoGenerator
         return this;
     }
 
-    public JceKeyAgreeRecipientInfoGenerator setSecureRandom(SecureRandom random)
+    public JceKeyAgreeRecipientInfoGenerator setRandom(SecureRandom random)
     {
         this.random = random;
 

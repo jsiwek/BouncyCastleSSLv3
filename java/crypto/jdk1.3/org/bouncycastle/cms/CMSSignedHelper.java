@@ -1,24 +1,5 @@
 package org.bouncycastle.cms;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.Provider;
-import java.security.Signature;
-import java.security.cert.CRLException;
-import org.bouncycastle.jce.cert.CertStore;
-import java.security.cert.CertificateException;
-import org.bouncycastle.jce.cert.CertificateFactory;
-import org.bouncycastle.jce.cert.CollectionCertStoreParameters;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.ASN1TaggedObject;
@@ -26,8 +7,8 @@ import org.bouncycastle.asn1.DEREncodable;
 import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DERObject;
 import org.bouncycastle.asn1.DERObjectIdentifier;
-import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.eac.EACObjectIdentifiers;
+import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
@@ -39,6 +20,25 @@ import org.bouncycastle.x509.NoSuchStoreException;
 import org.bouncycastle.x509.X509CollectionStoreParameters;
 import org.bouncycastle.x509.X509Store;
 import org.bouncycastle.x509.X509V2AttributeCertificate;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.Signature;
+import java.security.Provider;
+import java.security.cert.CRLException;
+import org.bouncycastle.jce.cert.CertStore;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import org.bouncycastle.jce.cert.CollectionCertStoreParameters;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 class CMSSignedHelper
 {
@@ -98,8 +98,6 @@ class CMSSignedHelper
         encryptionAlgs.put(CryptoProObjectIdentifiers.gostR3410_2001.getId(), "ECGOST3410");
         encryptionAlgs.put("1.3.6.1.4.1.5849.1.6.2", "ECGOST3410");
         encryptionAlgs.put("1.3.6.1.4.1.5849.1.1.5", "GOST3410");
-        encryptionAlgs.put(CryptoProObjectIdentifiers.gostR3411_94_with_gostR3410_2001.getId(), "ECGOST3410");
-        encryptionAlgs.put(CryptoProObjectIdentifiers.gostR3411_94_with_gostR3410_94.getId(), "GOST3410");
 
         digestAlgs.put(PKCSObjectIdentifiers.md2.getId(), "MD2");
         digestAlgs.put(PKCSObjectIdentifiers.md4.getId(), "MD4");
@@ -177,6 +175,8 @@ class CMSSignedHelper
     {
         try
         {
+        try
+        {
             return createDigestInstance(algorithm, provider);
         }
         catch (NoSuchAlgorithmException e)
@@ -199,23 +199,21 @@ class CMSSignedHelper
             }
             throw e;
         }
+        }
+        catch (NoSuchProviderException e)
+        {
+            return getDigestInstance(algorithm, null); // try rolling back
+        }
     }
 
     private MessageDigest createDigestInstance(
         String algorithm,
         Provider provider)
-        throws NoSuchAlgorithmException
+        throws NoSuchAlgorithmException, NoSuchProviderException
     {
         if (provider != null)
         {
-            try
-            {
             return MessageDigest.getInstance(algorithm, provider.getName());
-            }
-            catch (NoSuchProviderException e)
-            {
-                throw new NoSuchAlgorithmException(e.toString());
-            }
         }
         else
         {
@@ -226,18 +224,11 @@ class CMSSignedHelper
     Signature getSignatureInstance(
         String algorithm, 
         Provider provider)
-        throws NoSuchAlgorithmException
+        throws NoSuchAlgorithmException, NoSuchProviderException
     {
         if (provider != null)
         {
-            try
-            {
             return Signature.getInstance(algorithm, provider.getName());
-            }
-            catch (NoSuchProviderException e)
-            {
-                throw new NoSuchAlgorithmException(e.toString());
-            }
         }
         else
         {
@@ -367,16 +358,12 @@ class CMSSignedHelper
         {
             if (provider != null)
             {
-                return CertStore.getInstance(type, new CollectionCertStoreParameters(certsAndcrls), provider.getName());
+                return CertStore.getInstance(type, new CollectionCertStoreParameters(certsAndcrls), provider);
             }
             else
             {
                 return CertStore.getInstance(type, new CollectionCertStoreParameters(certsAndcrls));
             }
-        }
-        catch (NoSuchProviderException e)
-        {
-            throw new CMSException("can't setup the CertStore", e);
         }
         catch (InvalidAlgorithmParameterException e)
         {
@@ -393,14 +380,7 @@ class CMSSignedHelper
         {
             if (provider != null)
             {
-                try
-                {
                 cf = CertificateFactory.getInstance("X.509", provider.getName());
-                }
-                catch (NoSuchProviderException e)
-                {
-                    throw new CMSException(e.toString(), e);
-                }
             }
             else
             {
@@ -410,6 +390,10 @@ class CMSSignedHelper
         catch (CertificateException ex)
         {
             throw new CMSException("can't get certificate factory.", ex);
+        }
+        catch (NoSuchProviderException ex)
+        {
+            throw new CMSException("can't get provider for certificate factory.", ex);
         }
         Enumeration e = certSet.getObjects();
 
@@ -447,14 +431,7 @@ class CMSSignedHelper
         {
             if (provider != null)
             {
-                try
-                {
                 cf = CertificateFactory.getInstance("X.509", provider.getName());
-                }
-                catch (NoSuchProviderException e)
-                {
-                    throw new CMSException(e.toString(), e);
-                }
             }
             else
             {
@@ -464,6 +441,10 @@ class CMSSignedHelper
         catch (CertificateException ex)
         {
             throw new CMSException("can't get certificate factory.", ex);
+        }
+        catch (NoSuchProviderException ex)
+        {
+            throw new CMSException("can't get certificate factory provider.", ex);
         }
         Enumeration e = certSet.getObjects();
 
@@ -506,4 +487,5 @@ class CMSSignedHelper
     {
         digestAlgs.put(oid.getId(), algorithmName);
     }
+
 }

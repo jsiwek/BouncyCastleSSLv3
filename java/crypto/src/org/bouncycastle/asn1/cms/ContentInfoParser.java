@@ -1,11 +1,11 @@
 package org.bouncycastle.asn1.cms;
 
-import java.io.IOException;
-
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.ASN1SequenceParser;
-import org.bouncycastle.asn1.ASN1TaggedObjectParser;
 import org.bouncycastle.asn1.DEREncodable;
+import org.bouncycastle.asn1.ASN1TaggedObjectParser;
+
+import java.io.IOException;
 
 /**
  * Produce an object suitable for an ASN1OutputStream.
@@ -18,18 +18,18 @@ import org.bouncycastle.asn1.DEREncodable;
  */
 public class ContentInfoParser
 {
-    private ASN1ObjectIdentifier contentType;
+    private DERObjectIdentifier contentType;
     private ASN1TaggedObjectParser content;
 
     public ContentInfoParser(
         ASN1SequenceParser seq)
         throws IOException
     {
-        contentType = (ASN1ObjectIdentifier)seq.readObject();
+        contentType = (DERObjectIdentifier)seq.readObject();
         content = (ASN1TaggedObjectParser)seq.readObject();
     }
 
-    public ASN1ObjectIdentifier getContentType()
+    public DERObjectIdentifier getContentType()
     {
         return contentType;
     }

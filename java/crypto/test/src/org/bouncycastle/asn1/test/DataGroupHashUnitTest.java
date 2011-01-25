@@ -39,18 +39,14 @@ public class DataGroupHashUnitTest
         DataGroupHash       dg = new DataGroupHash(dataGroupNumber, dataHash);
 
         checkConstruction(dg, dataGroupNumber, dataHash);
-
-        try
+                   
+        dg = DataGroupHash.getInstance(null);
+        
+        if (dg != null)
         {
-            DataGroupHash.getInstance(null);
-
-            fail("getInstance() failed to detect null.");
+            fail("null getInstance() failed.");
         }
-        catch (IllegalArgumentException e)
-        {
-            // expected
-        }
-
+        
         try
         {
             DataGroupHash.getInstance(new Object());

@@ -12,9 +12,9 @@ import org.bouncycastle.crypto.params.DHPublicKeyParameters;
 
 class TlsDHEKeyExchange extends TlsDHKeyExchange
 {
-    TlsDHEKeyExchange(TlsClientContext context, CertificateVerifyer verifyer, int keyExchange)
+    TlsDHEKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer, short keyExchange)
     {
-        super(context, verifyer, keyExchange);
+        super(handler, verifyer, keyExchange);
     }
 
     public void skipServerKeyExchange() throws IOException
@@ -22,11 +22,9 @@ class TlsDHEKeyExchange extends TlsDHKeyExchange
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
     }
 
-    public void processServerKeyExchange(InputStream is)
+    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
         throws IOException
     {
-        SecurityParameters securityParameters = context.getSecurityParameters();
-
         Signer signer = initSigner(tlsSigner, securityParameters);
         InputStream sigIn = new SignerInputStream(is, signer);
 

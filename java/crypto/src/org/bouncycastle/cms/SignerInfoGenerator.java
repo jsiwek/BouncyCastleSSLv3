@@ -22,7 +22,6 @@ import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DigestAlgorithmIdentifierFinder;
@@ -62,7 +61,6 @@ public class SignerInfoGenerator
     private final DigestAlgorithmIdentifierFinder digAlgFinder = new DefaultDigestAlgorithmIdentifierFinder();
 
     private byte[] calculatedDigest = null;
-    private X509CertificateHolder certHolder;
 
     public SignerInfoGenerator(
         SignerIdentifier signerIdentifier,
@@ -140,16 +138,6 @@ public class SignerInfoGenerator
         this.unsAttrGen = unsAttrGen;
     }
 
-    public boolean hasAssociatedCertificate()
-    {
-        return certHolder != null;
-    }
-
-    public X509CertificateHolder getAssociatedCertificate()
-    {
-        return certHolder;
-    }
-    
     public AlgorithmIdentifier getDigestAlgorithm()
     {
         if (digester != null)
@@ -246,11 +234,6 @@ public class SignerInfoGenerator
         {
             throw new CMSException("encoding error.", e);
         }
-    }
-
-    void setAssociatedCertificate(X509CertificateHolder certHolder)
-    {
-        this.certHolder = certHolder;
     }
 
     private ASN1Set getAttributeSet(

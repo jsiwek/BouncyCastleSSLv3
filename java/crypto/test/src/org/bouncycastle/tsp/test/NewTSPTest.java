@@ -3,6 +3,8 @@ package org.bouncycastle.tsp.test;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.PrivateKey;
+import java.security.cert.CertStore;
+import java.security.cert.CollectionCertStoreParameters;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -15,12 +17,11 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.cmp.PKIFailureInfo;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.cert.jcajce.JcaCertStore;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
-import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoGeneratorBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.tsp.GenTimeAccuracy;
 import org.bouncycastle.tsp.TSPAlgorithms;
@@ -33,7 +34,6 @@ import org.bouncycastle.tsp.TimeStampToken;
 import org.bouncycastle.tsp.TimeStampTokenGenerator;
 import org.bouncycastle.tsp.TimeStampTokenInfo;
 import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.Store;
 
 public class NewTSPTest
     extends TestCase
@@ -59,7 +59,8 @@ public class NewTSPTest
             certList.add(origCert);
             certList.add(signCert);
 
-            Store certs = new JcaCertStore(certList);
+            CertStore certs = CertStore.getInstance("Collection",
+                    new CollectionCertStoreParameters(certList), "BC");
             
             basicTest(origKP.getPrivate(), origCert, certs);     
             responseValidationTest(origKP.getPrivate(), origCert, certs);
@@ -77,26 +78,26 @@ public class NewTSPTest
     private void basicTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store certs)
+        CertStore       certs)
         throws Exception
     {
         TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(
-                new JcaSimpleSignerInfoGeneratorBuilder().build("SHA1withRSA", privateKey, cert), new ASN1ObjectIdentifier("1.2"));
+                privateKey, cert, TSPAlgorithms.SHA1, "1.2");
         
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest          request = reqGen.generate(TSPAlgorithms.SHA1, new byte[20], BigInteger.valueOf(100));
 
         TimeStampResponseGenerator tsRespGen = new TimeStampResponseGenerator(tsTokenGen, TSPAlgorithms.ALLOWED);
 
-        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date());
+        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date(), "BC");
 
         tsResp = new TimeStampResponse(tsResp.getEncoded());
 
         TimeStampToken  tsToken = tsResp.getTimeStampToken();
 
-        tsToken.validate(new JcaContentVerifierProviderBuilder().setProvider(BC).build(cert), new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
+        tsToken.validate(cert, "BC");
 
         AttributeTable  table = tsToken.getSignedAttributes();
 
@@ -106,14 +107,15 @@ public class NewTSPTest
     private void responseValidationTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest          request = reqGen.generate(TSPAlgorithms.SHA1, new byte[20], BigInteger.valueOf(100));
@@ -176,14 +178,15 @@ public class NewTSPTest
     private void incorrectHashTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
         
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest          request = reqGen.generate(TSPAlgorithms.SHA1, new byte[16]);
@@ -217,14 +220,15 @@ public class NewTSPTest
     private void badAlgorithmTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
-        JcaSimpleSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSimpleSignerInfoGeneratorBuilder().setProvider(BC);
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
+        JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build("SHA1withRSA", privateKey, cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest            request = reqGen.generate("1.2.3.4.5", new byte[20]);
@@ -258,21 +262,22 @@ public class NewTSPTest
     private void timeNotAvailableTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest            request = reqGen.generate("1.2.3.4.5", new byte[20]);
 
         TimeStampResponseGenerator tsRespGen = new TimeStampResponseGenerator(tsTokenGen, TSPAlgorithms.ALLOWED);
 
-        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), null);
+        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), null, "BC");
 
         tsResp = new TimeStampResponse(tsResp.getEncoded());
 
@@ -299,14 +304,15 @@ public class NewTSPTest
     private void badPolicyTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         
@@ -316,7 +322,7 @@ public class NewTSPTest
 
         TimeStampResponseGenerator tsRespGen = new TimeStampResponseGenerator(tsTokenGen, TSPAlgorithms.ALLOWED, new HashSet());
 
-        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date());
+        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date(), "BC");
 
         tsResp = new TimeStampResponse(tsResp.getEncoded());
 
@@ -343,14 +349,15 @@ public class NewTSPTest
     private void certReqTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
         
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         
@@ -375,16 +382,16 @@ public class NewTSPTest
         
         try
         {
-            tsToken.validate(new JcaContentVerifierProviderBuilder().setProvider(BC).build(cert), new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
+            tsToken.validate(cert, "BC");
         }
         catch (TSPValidationException e)
         {
             fail("certReq(false) verification of token failed.");
         }
 
-        Store   respCerts = tsToken.getCertificates();
+        CertStore   respCerts = tsToken.getCertificatesAndCRLs("Collection", "BC");
         
-        Collection  certsColl = respCerts.getMatches(null);
+        Collection  certsColl = respCerts.getCertificates(null);
         
         if (!certsColl.isEmpty())
         {
@@ -396,14 +403,15 @@ public class NewTSPTest
     private void tokenEncodingTest(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2.3.4.5.6"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2.3.4.5.6"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         TimeStampRequestGenerator  reqGen = new TimeStampRequestGenerator();
         TimeStampRequest           request = reqGen.generate(TSPAlgorithms.SHA1, new byte[20], BigInteger.valueOf(100));
@@ -425,14 +433,15 @@ public class NewTSPTest
     private void testAccuracyZeroCerts(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         tsTokenGen.setAccuracySeconds(1);
         tsTokenGen.setAccuracyMillis(2);
@@ -443,7 +452,7 @@ public class NewTSPTest
 
         TimeStampResponseGenerator tsRespGen = new TimeStampResponseGenerator(tsTokenGen, TSPAlgorithms.ALLOWED);
 
-        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date());
+        TimeStampResponse tsResp = tsRespGen.generate(request, new BigInteger("23"), new Date(), "BC");
 
         tsResp = new TimeStampResponse(tsResp.getEncoded());
 
@@ -477,9 +486,9 @@ public class NewTSPTest
         //
         // test certReq
         //
-        Store store = tsToken.getCertificates();
+        CertStore store = tsToken.getCertificatesAndCRLs("Collection", "BC");
         
-        Collection certificates = store.getMatches(null);
+        Collection certificates = store.getCertificates(null);
         
         assertEquals(0, certificates.size());
     }
@@ -487,14 +496,15 @@ public class NewTSPTest
     private void testAccuracyWithCertsAndOrdering(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2.3"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2.3"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
 
         tsTokenGen.setAccuracySeconds(3);
         tsTokenGen.setAccuracyMillis(1);
@@ -550,9 +560,9 @@ public class NewTSPTest
         //
         // test certReq
         //
-        Store store = tsToken.getCertificates();
+        CertStore store = tsToken.getCertificatesAndCRLs("Collection", "BC");
         
-        Collection certificates = store.getMatches(null);
+        Collection certificates = store.getCertificates(null);
         
         assertEquals(2, certificates.size());
     }   
@@ -560,14 +570,15 @@ public class NewTSPTest
     private void testNoNonse(
         PrivateKey      privateKey,
         X509Certificate cert,
-        Store       certs)
+        CertStore       certs)
         throws Exception
     {
+        X509CertificateHolder signerCertificate = new JcaX509CertificateHolder(cert);
         JcaSignerInfoGeneratorBuilder infoGeneratorBuilder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
 
-        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), new ASN1ObjectIdentifier("1.2.3"));
+        TimeStampTokenGenerator tsTokenGen = new TimeStampTokenGenerator(infoGeneratorBuilder.build(new JcaContentSignerBuilder("MD5withRSA").setProvider(BC).build(privateKey), cert), signerCertificate, new ASN1ObjectIdentifier("1.2.3"));
 
-        tsTokenGen.addCertificates(certs);
+        tsTokenGen.setCertificatesAndCRLs(certs);
         
         TimeStampRequestGenerator reqGen = new TimeStampRequestGenerator();
         TimeStampRequest          request = reqGen.generate(TSPAlgorithms.SHA1, new byte[20]);
@@ -612,9 +623,9 @@ public class NewTSPTest
         //
         // test certReq
         //
-        Store store = tsToken.getCertificates();
+        CertStore store = tsToken.getCertificatesAndCRLs("Collection", "BC");
         
-        Collection certificates = store.getMatches(null);
+        Collection certificates = store.getCertificates(null);
         
         assertEquals(0, certificates.size());
     } 

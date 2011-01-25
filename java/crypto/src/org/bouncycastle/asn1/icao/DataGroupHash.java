@@ -46,19 +46,22 @@ public class DataGroupHash
     public static DataGroupHash getInstance(
         Object obj)
     {
-        if (obj instanceof DataGroupHash)
+        if (obj == null || obj instanceof DataGroupHash)
         {
             return (DataGroupHash)obj;
         }
-        else if (obj != null)
-        {
-            return new DataGroupHash(ASN1Sequence.getInstance(obj));
-        }
 
-        throw new IllegalArgumentException("null object in getInstance()");
+        if (obj instanceof ASN1Sequence)
+        {
+            return new DataGroupHash(ASN1Sequence.getInstance(obj));            
+        }
+        else
+        {
+            throw new IllegalArgumentException("unknown object in getInstance: " + obj.getClass().getName());
+        }
     }                
             
-    private DataGroupHash(ASN1Sequence seq)
+    public DataGroupHash(ASN1Sequence seq)
     {
         Enumeration e = seq.getObjects();
 

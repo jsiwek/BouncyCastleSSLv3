@@ -18,7 +18,7 @@ import java.security.Signature;
 import org.bouncycastle.jce.cert.CertStore;
 import org.bouncycastle.jce.cert.CertStoreParameters;
 import java.security.cert.CertificateException;
-import org.bouncycastle.jce.cert.CertificateFactory;
+import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;

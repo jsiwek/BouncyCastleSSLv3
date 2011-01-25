@@ -1,16 +1,5 @@
 package org.bouncycastle.openpgp.test;
 
-import java.io.ByteArrayInputStream;
-import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.SecureRandom;
-import java.security.Security;
-import java.util.Date;
-import java.util.Iterator;
-
-import javax.crypto.Cipher;
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.ElGamalParameterSpec;
 import org.bouncycastle.openpgp.PGPEncryptedData;
@@ -28,6 +17,17 @@ import org.bouncycastle.openpgp.PGPSignature;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.test.SimpleTest;
+
+import java.io.ByteArrayInputStream;
+import java.math.BigInteger;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.util.Date;
+import java.util.Iterator;
+
+import javax.crypto.Cipher;
 
 public class PGPKeyRingTest
     extends SimpleTest
@@ -2274,10 +2274,6 @@ public class PGPKeyRingTest
             {
                 Exception ex = ((PGPException)e).getUnderlyingException();
                 fail("exception: " + ex, ex);
-            }
-            else
-            {
-                fail("exception: " + e, e);
             }
         }
     }

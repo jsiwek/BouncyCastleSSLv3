@@ -591,9 +591,9 @@ public class CMSSignedDataGenerator
         //
         boolean isCounterSignature = (eContentType == null);
 
-        ASN1ObjectIdentifier contentTypeOID = isCounterSignature
+        DERObjectIdentifier contentTypeOID = isCounterSignature
             ?   CMSObjectIdentifiers.data
-            :   new ASN1ObjectIdentifier(eContentType);
+            :   new DERObjectIdentifier(eContentType);
 
         for (Iterator it = signerGens.iterator(); it.hasNext();)
         {
@@ -631,7 +631,7 @@ public class CMSSignedDataGenerator
                 }, sGen.getUnsignedAttributeTableGenerator());
             }
 
-            SignerInfo inf = sGen.generate(contentTypeOID);
+            SignerInfo inf = sGen.generate(new ASN1ObjectIdentifier(contentTypeOID.getId()));
 
             digestAlgs.add(inf.getDigestAlgorithm());
             signerInfos.add(inf);

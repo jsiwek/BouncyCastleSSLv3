@@ -1,5 +1,15 @@
 package org.bouncycastle.x509;
 
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1Object;
+import org.bouncycastle.asn1.DEROctetString;
+import org.bouncycastle.asn1.x509.GeneralName;
+import org.bouncycastle.asn1.x509.Target;
+import org.bouncycastle.asn1.x509.TargetInformation;
+import org.bouncycastle.asn1.x509.Targets;
+import org.bouncycastle.asn1.x509.X509Extensions;
+import org.bouncycastle.util.Selector;
+
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.cert.CertificateExpiredException;
@@ -11,23 +21,12 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1Object;
-import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.x509.GeneralName;
-import org.bouncycastle.asn1.x509.Target;
-import org.bouncycastle.asn1.x509.TargetInformation;
-import org.bouncycastle.asn1.x509.Targets;
-import org.bouncycastle.asn1.x509.X509Extensions;
-import org.bouncycastle.util.Selector;
-
 /**
  * This class is an <code>Selector</code> like implementation to select
  * attribute certificates from a given set of criteria.
  * 
  * @see org.bouncycastle.x509.X509AttributeCertificate
  * @see org.bouncycastle.x509.X509Store
- *  @deprecated use org.bouncycastle.cert.X509AttributeCertificateSelector and org.bouncycastle.cert.X509AttributeCertificateSelectorBuilder.
  */
 public class X509AttributeCertStoreSelector
     implements Selector
@@ -379,8 +378,9 @@ public class X509AttributeCertStoreSelector
     }
 
     /**
-     * Gets the target names. The collection consists of <code>GeneralName</code>
-     * objects.
+     * Gets the target names. The collection consists of <code>List</code>s
+     * made up of an <code>Integer</code> in the first entry and a DER encoded
+     * byte array or a <code>String</code> in the second entry.
      * <p>
      * The returned collection is immutable.
      * 
@@ -447,7 +447,9 @@ public class X509AttributeCertStoreSelector
 
 
     /**
-     * Gets the target groups. The collection consists of <code>GeneralName</code> objects.
+     * Gets the target groups. The collection consists of <code>List</code>s
+     * made up of an <code>Integer</code> in the first entry and a DER encoded
+     * byte array or a <code>String</code> in the second entry.
      * <p>
      * The returned collection is immutable.
      *

@@ -9,9 +9,9 @@ import java.io.OutputStream;
  */
 class TlsECDHKeyExchange extends TlsECKeyExchange
 {
-    TlsECDHKeyExchange(TlsClientContext context, CertificateVerifyer verifyer, int keyExchange)
+    TlsECDHKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer, short keyExchange)
     {
-        super(context, verifyer, keyExchange);
+        super(handler, verifyer, keyExchange);
     }
 
     public void skipServerCertificate() throws IOException
@@ -24,7 +24,7 @@ class TlsECDHKeyExchange extends TlsECKeyExchange
         // do nothing
     }
 
-    public void processServerKeyExchange(InputStream is)
+    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
         throws IOException
     {
         throw new TlsFatalAlert(AlertDescription.unexpected_message);

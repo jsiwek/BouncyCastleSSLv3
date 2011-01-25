@@ -7,7 +7,6 @@ import org.bouncycastle.crypto.engines.DESEngine;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.paddings.BlockCipherPadding;
 import org.bouncycastle.crypto.params.KeyParameter;
-import org.bouncycastle.crypto.params.ParametersWithIV;
 
 /**
  * DES based CBC Block Cipher MAC according to ISO9797, algorithm 3 (ANSI X9.19 Retail MAC)
@@ -126,27 +125,17 @@ public class ISO9797Alg3Mac
     {
         reset();
 
-        if (!(params instanceof KeyParameter || params instanceof ParametersWithIV))
+        if (!(params instanceof KeyParameter))
         {
             throw new IllegalArgumentException(
-                    "params must be an instance of KeyParameter or ParametersWithIV");
+                    "params must be an instance of KeyParameter");
         }
 
         // KeyParameter must contain a double or triple length DES key,
         // however the underlying cipher is a single DES. The middle and
         // right key are used only in the final step.
 
-        KeyParameter kp;
-
-        if (params instanceof KeyParameter)
-        {
-            kp = (KeyParameter)params;
-        }
-        else
-        {
-            kp = (KeyParameter)((ParametersWithIV)params).getParameters();
-        }
-
+        KeyParameter kp = (KeyParameter)params;
         KeyParameter key1;
         byte[] keyvalue = kp.getKey();
 
@@ -168,14 +157,7 @@ public class ISO9797Alg3Mac
                     "Key must be either 112 or 168 bit long");
         }
 
-        if (params instanceof ParametersWithIV)
-        {
-            cipher.init(true, new ParametersWithIV(key1, ((ParametersWithIV)params).getIV()));
-        }
-        else
-        {
-            cipher.init(true, key1);
-        }
+        cipher.init(true, key1);
     }
     
     public int getMacSize()

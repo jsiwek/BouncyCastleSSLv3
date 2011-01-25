@@ -43,7 +43,7 @@ import org.bouncycastle.cms.PasswordRecipientInformation;
 import org.bouncycastle.cms.RecipientId;
 import org.bouncycastle.cms.RecipientInformation;
 import org.bouncycastle.cms.RecipientInformationStore;
-import org.bouncycastle.cms.jcajce.JceKeyAgreeRecipientId;
+import org.bouncycastle.jce.PrincipalUtil;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
@@ -718,7 +718,9 @@ public class EnvelopedDataTest
         byte[] expectedData, X509Certificate reciCert, PrivateKey reciPrivKey, String provider)
         throws CMSException, NoSuchProviderException, CertificateEncodingException, IOException
     {
-        RecipientId rid = new JceKeyAgreeRecipientId(reciCert);
+        RecipientId rid = new RecipientId();
+        rid.setIssuer(PrincipalUtil.getIssuerX509Principal(reciCert).getEncoded());
+        rid.setSerialNumber(reciCert.getSerialNumber());
 
         RecipientInformation recipient = recipients.get(rid);
         assertNotNull(recipient);

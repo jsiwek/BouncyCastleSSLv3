@@ -11,9 +11,9 @@ import org.bouncycastle.util.test.SimpleTestResult;
 public class AllTests
     extends TestCase
 {
-    public void testSimpleTests()
+    public void testJCE()
     {
-        org.bouncycastle.util.test.Test[] tests = new org.bouncycastle.util.test.Test[] { new CertTest(), new PKCS10Test(), new AttrCertSelectorTest(), new AttrCertTest() };
+        org.bouncycastle.util.test.Test[] tests = new org.bouncycastle.util.test.Test[] { new CertTest(), new PKCS10Test() };
 
         for (int i = 0; i != tests.length; i++)
         {

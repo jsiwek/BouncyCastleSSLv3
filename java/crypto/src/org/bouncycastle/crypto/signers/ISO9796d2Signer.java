@@ -1,15 +1,14 @@
 package org.bouncycastle.crypto.signers;
 
-import java.util.Hashtable;
-
 import org.bouncycastle.crypto.AsymmetricBlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.CryptoException;
 import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.SignerWithRecovery;
+import org.bouncycastle.crypto.digests.RIPEMD128Digest;
+import org.bouncycastle.crypto.digests.RIPEMD160Digest;
+import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
-import org.bouncycastle.util.Arrays;
 
 /**
  * ISO9796-2 - mechanism using a hash function with recovery (scheme 1)
@@ -21,29 +20,9 @@ public class ISO9796d2Signer
     static final public int   TRAILER_RIPEMD160   = 0x31CC;
     static final public int   TRAILER_RIPEMD128   = 0x32CC;
     static final public int   TRAILER_SHA1        = 0x33CC;
-    static final public int   TRAILER_SHA256      = 0x34CC;
-    static final public int   TRAILER_SHA512      = 0x35CC;
-    static final public int   TRAILER_SHA384      = 0x36CC;
-    static final public int   TRAILER_WHIRLPOOL   = 0x37CC;
-
-    private static Hashtable  trailerMap          = new Hashtable();
-
-    static
-    {
-        trailerMap.put("RIPEMD128", new Integer(TRAILER_RIPEMD128));
-        trailerMap.put("RIPEMD160", new Integer(TRAILER_RIPEMD160));
-
-        trailerMap.put("SHA-1", new Integer(TRAILER_SHA1));
-        trailerMap.put("SHA-256", new Integer(TRAILER_SHA256));
-        trailerMap.put("SHA-384", new Integer(TRAILER_SHA384));
-        trailerMap.put("SHA-512", new Integer(TRAILER_SHA512));
-
-        trailerMap.put("Whirlpool", new Integer(TRAILER_WHIRLPOOL));
-    }
 
     private Digest                      digest;
     private AsymmetricBlockCipher       cipher;
-    private boolean                     includeRecoveredMessage;
 
     private int         trailer;
     private int         keyBits;
@@ -52,9 +31,6 @@ public class ISO9796d2Signer
     private int         messageLength;
     private boolean     fullMessage;
     private byte[]      recoveredMessage;
-
-    private byte[]      preSig;
-    private byte[]      preBlock;
 
     /**
      * Generate a signer for the with either implicit or explicit trailers
@@ -78,11 +54,17 @@ public class ISO9796d2Signer
         }
         else
         {
-            Integer trailerObj = (Integer)trailerMap.get(digest.getAlgorithmName());
-
-            if (trailerObj != null)
+            if (digest instanceof SHA1Digest)
             {
-                trailer = trailerObj.intValue();
+                trailer = TRAILER_SHA1;
+            }
+            else if (digest instanceof RIPEMD160Digest)
+            {
+                trailer = TRAILER_RIPEMD160;
+            }
+            else if (digest instanceof RIPEMD128Digest)
+            {
+                trailer = TRAILER_RIPEMD128;
             }
             else
             {
@@ -183,97 +165,6 @@ public class ISO9796d2Signer
         }
     }
 
-    public void updateWithRecoveredMessage(byte[] signature)
-        throws InvalidCipherTextException
-    {
-        byte[]      block = cipher.processBlock(signature, 0, signature.length);
-
-        if (((block[0] & 0xC0) ^ 0x40) != 0)
-        {
-            throw new InvalidCipherTextException("malformed signature");
-        }
-
-        if (((block[block.length - 1] & 0xF) ^ 0xC) != 0)
-        {
-            throw new InvalidCipherTextException("malformed signature");
-        }
-
-        int     delta = 0;
-
-        if (((block[block.length - 1] & 0xFF) ^ 0xBC) == 0)
-        {
-            delta = 1;
-        }
-        else
-        {
-            int sigTrail = ((block[block.length - 2] & 0xFF) << 8) | (block[block.length - 1] & 0xFF);
-            Integer trailerObj = (Integer)trailerMap.get(digest.getAlgorithmName());
-
-            if (trailerObj != null)
-            {
-                if (sigTrail != trailerObj.intValue())
-                {
-                    throw new IllegalStateException("signer initialised with wrong digest for trailer " + sigTrail);
-                }
-            }
-            else
-            {
-                throw new IllegalArgumentException("unrecognised hash in signature");
-            }
-
-            delta = 2;
-        }
-
-        //
-        // find out how much padding we've got
-        //
-        int mStart = 0;
-
-        for (mStart = 0; mStart != block.length; mStart++)
-        {
-            if (((block[mStart] & 0x0f) ^ 0x0a) == 0)
-            {
-                break;
-            }
-        }
-
-        mStart++;
-
-        int off = block.length - delta - digest.getDigestSize();
-
-        //
-        // there must be at least one byte of message string
-        //
-        if ((off - mStart) <= 0)
-        {
-            throw new InvalidCipherTextException("malformed block");
-        }
-
-        //
-        // if we contain the whole message as well, check the hash of that.
-        //
-        if ((block[0] & 0x20) == 0)
-        {
-            fullMessage = true;
-
-            recoveredMessage = new byte[off - mStart];
-            System.arraycopy(block, mStart, recoveredMessage, 0, recoveredMessage.length);
-        }
-        else
-        {
-            fullMessage = false;
-
-            recoveredMessage = new byte[off - mStart];
-            System.arraycopy(block, mStart, recoveredMessage, 0, recoveredMessage.length);
-        }
-
-        preSig = signature;
-        preBlock = block;
-
-        digest.update(recoveredMessage, 0, recoveredMessage.length);
-        messageLength = recoveredMessage.length;
-    }
-    
     /**
      * update the internal digest with the byte b
      */
@@ -282,7 +173,7 @@ public class ISO9796d2Signer
     {
         digest.update(b);
 
-        if (preSig == null && messageLength < mBuf.length)
+        if (messageLength < mBuf.length)
         {
             mBuf[messageLength] = b;
         }
@@ -300,7 +191,7 @@ public class ISO9796d2Signer
     {
         digest.update(in, off, len);
 
-        if (preSig == null && messageLength < mBuf.length)
+        if (messageLength < mBuf.length)
         {
             for (int i = 0; i < len && (i + messageLength) < mBuf.length; i++)
             {
@@ -409,32 +300,14 @@ public class ISO9796d2Signer
         byte[]      signature)
     {
         byte[]      block = null;
-        boolean     updateWithRecoveredCalled;
 
-        if (preSig == null)
+        try
         {
-            updateWithRecoveredCalled = false;
-            try
-            {
-                block = cipher.processBlock(signature, 0, signature.length);
-            }
-            catch (Exception e)
-            {
-                return false;
-            }
+            block = cipher.processBlock(signature, 0, signature.length);
         }
-        else
+        catch (Exception e)
         {
-            if (!Arrays.areEqual(preSig, signature))
-            {
-                throw new IllegalStateException("updateWithRecoveredMessage called on different signature");
-            }
-
-            updateWithRecoveredCalled = true;
-            block = preBlock;
-
-            preSig = null;
-            preBlock = null;
+            return false;
         }
 
         if (((block[0] & 0xC0) ^ 0x40) != 0)
@@ -456,17 +329,28 @@ public class ISO9796d2Signer
         else
         {
             int sigTrail = ((block[block.length - 2] & 0xFF) << 8) | (block[block.length - 1] & 0xFF);
-            Integer trailerObj = (Integer)trailerMap.get(digest.getAlgorithmName());
 
-            if (trailerObj != null)
+            switch (sigTrail)
             {
-                if (sigTrail != trailerObj.intValue())
-                {
-                    throw new IllegalStateException("signer initialised with wrong digest for trailer " + sigTrail);
-                }
-            }
-            else
-            {
+            case TRAILER_RIPEMD160:
+                    if (!(digest instanceof RIPEMD160Digest))
+                    {
+                        throw new IllegalStateException("signer should be initialised with RIPEMD160");
+                    }
+                    break;
+            case TRAILER_SHA1:
+                    if (!(digest instanceof SHA1Digest))
+                    {
+                        throw new IllegalStateException("signer should be initialised with SHA1");
+                    }
+                    break;
+            case TRAILER_RIPEMD128:
+                    if (!(digest instanceof RIPEMD128Digest))
+                    {
+                        throw new IllegalStateException("signer should be initialised with RIPEMD128");
+                    }
+                    break;
+            default:
                 throw new IllegalArgumentException("unrecognised hash in signature");
             }
 
@@ -509,12 +393,6 @@ public class ISO9796d2Signer
         if ((block[0] & 0x20) == 0)
         {
             fullMessage = true;
-
-            // check right number of bytes passed in.
-            if (messageLength > off - mStart)
-            {
-                return returnFalse(block);
-            }
             
             digest.reset();
             digest.update(block, mStart, off - mStart);
@@ -569,7 +447,7 @@ public class ISO9796d2Signer
         // if they've input a message check what we've recovered against
         // what was input.
         //
-        if (messageLength != 0 && !updateWithRecoveredCalled)
+        if (messageLength != 0)
         {
             if (!isSameAs(mBuf, recoveredMessage))
             {

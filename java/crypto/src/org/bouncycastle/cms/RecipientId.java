@@ -1,32 +1,70 @@
 package org.bouncycastle.cms;
 
+import org.bouncycastle.util.Arrays;
+
+import java.math.BigInteger;
 import java.security.cert.X509CertSelector;
 
-import org.bouncycastle.util.Selector;
-
-public abstract class RecipientId
+public class RecipientId
     extends X509CertSelector
-    implements Selector
 {
-    public static final int keyTrans = 0;
-    public static final int kek = 1;
-    public static final int keyAgree = 2;
-    public static final int password = 3;
+    byte[]  keyIdentifier = null;
 
-    private final int type;
-
-    protected RecipientId(int type)
+    /**
+     * set a secret key identifier (for use with KEKRecipientInfo)
+     */
+    public void setKeyIdentifier(
+        byte[]  keyIdentifier)
     {
-        this.type = type;
+        this.keyIdentifier = keyIdentifier;
     }
 
     /**
-     * Return the type code for this recipient ID.
-     *
-     * @return one of keyTrans, kek, keyAgree, password
+     * return the secret key identifier
      */
-    public int getType()
+    public byte[] getKeyIdentifier()
     {
-        return type;
+        return keyIdentifier;
+    }
+
+    public int hashCode()
+    {
+        int code = Arrays.hashCode(keyIdentifier)
+            ^ Arrays.hashCode(this.getSubjectKeyIdentifier());
+
+        BigInteger serialNumber = this.getSerialNumber();
+        if (serialNumber != null)
+        {
+            code ^= serialNumber.hashCode();
+        }
+
+        String issuer = this.getIssuerAsString();
+        if (issuer != null)
+        {
+            code ^= issuer.hashCode();
+        }
+
+        return code;
+    }
+
+    public boolean equals(
+        Object  o)
+    {
+        if (!(o instanceof RecipientId))
+        {
+            return false;
+        }
+
+        RecipientId id = (RecipientId)o;
+
+        return Arrays.areEqual(keyIdentifier, id.keyIdentifier)
+            && Arrays.areEqual(this.getSubjectKeyIdentifier(), id.getSubjectKeyIdentifier())
+            && equalsObj(this.getSerialNumber(), id.getSerialNumber())
+            && equalsObj(this.getIssuerAsString(), id.getIssuerAsString());
+    }
+
+    private boolean equalsObj(Object a, Object b)
+    {
+        return (a != null) ? a.equals(b) : b == null;
     }
 }

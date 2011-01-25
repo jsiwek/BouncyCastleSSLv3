@@ -95,9 +95,11 @@ public class PGPPublicKeyRing
      * 
      * @param keyID
      * @return PGPPublicKey
+     * @throws PGPException
      */
     public PGPPublicKey getPublicKey(
         long        keyID)
+        throws PGPException
     {    
         for (int i = 0; i != keys.size(); i++)
         {

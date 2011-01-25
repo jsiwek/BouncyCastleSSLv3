@@ -20,7 +20,6 @@ import java.util.Map;
 
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Generator;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetStringParser;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1SequenceParser;
@@ -33,6 +32,7 @@ import org.bouncycastle.asn1.BERSetParser;
 import org.bouncycastle.asn1.BERTaggedObject;
 import org.bouncycastle.asn1.DEREncodable;
 import org.bouncycastle.asn1.DERObject;
+import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERTaggedObject;
 import org.bouncycastle.asn1.DERTags;
@@ -105,7 +105,7 @@ public class CMSSignedDataParser
     private static final CMSSignedHelper HELPER = CMSSignedHelper.INSTANCE;
 
     private SignedDataParser        _signedData;
-    private ASN1ObjectIdentifier    _signedContentType;
+    private DERObjectIdentifier     _signedContentType;
     private CMSTypedStream          _signedContent;
     private Map                     _digests;
     
@@ -211,7 +211,7 @@ public class CMSSignedDataParser
             }
             else
             {
-                _signedContentType = new ASN1ObjectIdentifier(_signedContent.getContentType());
+                _signedContentType = new DERObjectIdentifier(_signedContent.getContentType());
             }
         }
         catch (IOException e)
@@ -685,7 +685,6 @@ public class CMSSignedDataParser
      * @param out the stream to write the new signed data object to.
      * @return out.
      * @exception CMSException if there is an error processing the CertStore
-     * @deprecated use method that takes Store objects.
      */
     public static OutputStream replaceCertificatesAndCRLs(
         InputStream   original,
@@ -759,104 +758,6 @@ public class CMSSignedDataParser
         if (crls.size() > 0)
         {
             sigGen.getRawOutputStream().write(new DERTaggedObject(false, 1, crls).getEncoded());
-        }
-
-        sigGen.getRawOutputStream().write(signedData.getSignerInfos().getDERObject().getEncoded());
-
-        sigGen.close();
-
-        sGen.close();
-
-        return out;
-    }
-
-    /**
-     * Replace the certificate and CRL information associated with this
-     * CMSSignedData object with the new one passed in.
-     * <p>
-     * The output stream is returned unclosed.
-     * </p>
-     * @param original the signed data stream to be used as a base.
-     * @param certs new certificates to be used, if any.
-     * @param crls new CRLs to be used, if any.
-     * @param attrCerts new attribute certificates to be used, if any.
-     * @param out the stream to write the new signed data object to.
-     * @return out.
-     * @exception CMSException if there is an error processing the CertStore
-     */
-    public static OutputStream replaceCertificatesAndCRLs(
-        InputStream   original,
-        Store         certs,
-        Store         crls,
-        Store         attrCerts,
-        OutputStream  out)
-        throws CMSException, IOException
-    {
-        ASN1StreamParser in = new ASN1StreamParser(original, CMSUtils.getMaximumMemory());
-        ContentInfoParser contentInfo = new ContentInfoParser((ASN1SequenceParser)in.readObject());
-        SignedDataParser signedData = SignedDataParser.getInstance(contentInfo.getContent(DERTags.SEQUENCE));
-
-        BERSequenceGenerator sGen = new BERSequenceGenerator(out);
-
-        sGen.addObject(CMSObjectIdentifiers.signedData);
-
-        BERSequenceGenerator sigGen = new BERSequenceGenerator(sGen.getRawOutputStream(), 0, true);
-
-        // version number
-        sigGen.addObject(signedData.getVersion());
-
-        // digests
-        sigGen.getRawOutputStream().write(signedData.getDigestAlgorithms().getDERObject().getEncoded());
-
-        // encap content info
-        ContentInfoParser encapContentInfo = signedData.getEncapContentInfo();
-
-        BERSequenceGenerator eiGen = new BERSequenceGenerator(sigGen.getRawOutputStream());
-
-        eiGen.addObject(encapContentInfo.getContentType());
-
-        pipeEncapsulatedOctetString(encapContentInfo, eiGen.getRawOutputStream());
-
-        eiGen.close();
-
-        //
-        // skip existing certs and CRLs
-        //
-        getASN1Set(signedData.getCertificates());
-        getASN1Set(signedData.getCrls());
-
-        //
-        // replace the certs and crls in the SignedData object
-        //
-        if (certs != null || attrCerts != null)
-        {
-            List certificates = new ArrayList();
-
-            if (certs != null)
-            {
-                certificates.addAll(CMSUtils.getCertificatesFromStore(certs));
-            }
-            if (attrCerts != null)
-            {
-                certificates.addAll(CMSUtils.getAttributeCertificatesFromStore(attrCerts));
-            }
-
-            ASN1Set asn1Certs = CMSUtils.createBerSetFromList(certificates);
-
-            if (asn1Certs.size() > 0)
-            {
-                sigGen.getRawOutputStream().write(new DERTaggedObject(false, 0, asn1Certs).getEncoded());
-            }
-        }
-
-        if (crls != null)
-        {
-            ASN1Set asn1Crls = CMSUtils.createBerSetFromList(CMSUtils.getCRLsFromStore(crls));
-
-            if (asn1Crls.size() > 0)
-            {
-                sigGen.getRawOutputStream().write(new DERTaggedObject(false, 1, asn1Crls).getEncoded());
-            }
         }
 
         sigGen.getRawOutputStream().write(signedData.getSignerInfos().getDERObject().getEncoded());

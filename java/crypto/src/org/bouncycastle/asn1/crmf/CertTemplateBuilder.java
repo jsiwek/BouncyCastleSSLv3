@@ -6,19 +6,19 @@ import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.DERInteger;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERTaggedObject;
-import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.X509Extensions;
+import org.bouncycastle.asn1.x509.X509Name;
 
 public class CertTemplateBuilder
 {
     private DERInteger version;
     private DERInteger serialNumber;
     private AlgorithmIdentifier signingAlg;
-    private X500Name issuer;
+    private X509Name issuer;
     private OptionalValidity validity;
-    private X500Name subject;
+    private X509Name subject;
     private SubjectPublicKeyInfo publicKey;
     private DERBitString issuerUID;
     private DERBitString subjectUID;
@@ -46,7 +46,7 @@ public class CertTemplateBuilder
         return this;
     }
 
-    public CertTemplateBuilder setIssuer(X500Name name)
+    public CertTemplateBuilder setIssuer(X509Name name)
     {
         issuer = name;
 
@@ -60,7 +60,7 @@ public class CertTemplateBuilder
         return this;
     }
 
-    public CertTemplateBuilder setSubject(X500Name name)
+    public CertTemplateBuilder setSubject(X509Name name)
     {
         subject = name;
 

@@ -68,7 +68,7 @@ public abstract class PasswordRecipientInfoGenerator
         return this;
     }
 
-    public PasswordRecipientInfoGenerator setSecureRandom(SecureRandom random)
+    public PasswordRecipientInfoGenerator setRandom(SecureRandom random)
     {
         this.random = random;
 

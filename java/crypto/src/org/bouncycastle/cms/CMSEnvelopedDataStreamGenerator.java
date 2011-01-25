@@ -107,8 +107,7 @@ public class CMSEnvelopedDataStreamGenerator
     /**
      * generate an enveloped object that contains an CMS Enveloped Data
      * object using the given provider and the passed in key generator.
-     * @throws IOException
-     * @deprecated
+     * @throws IOException 
      */
     private OutputStream open(
         OutputStream out,
@@ -158,7 +157,7 @@ public class CMSEnvelopedDataStreamGenerator
         ASN1ObjectIdentifier dataType,
         OutputStream         out,
         OutputEncryptor encryptor)
-        throws IOException, CMSException
+        throws CMSException, IOException
     {
         ASN1EncodableVector recipientInfos = new ASN1EncodableVector();
         GenericKey encKey = encryptor.getKey();
@@ -171,16 +170,6 @@ public class CMSEnvelopedDataStreamGenerator
             recipientInfos.add(recipient.generate(encKey));
         }
 
-        return open(dataType, out, recipientInfos, encryptor);
-    }
-
-    protected OutputStream open(
-        ASN1ObjectIdentifier dataType,
-        OutputStream         out,
-        ASN1EncodableVector  recipientInfos,
-        OutputEncryptor      encryptor)
-        throws IOException
-    {
         //
         // ContentInfo
         //
@@ -312,61 +301,10 @@ public class CMSEnvelopedDataStreamGenerator
         }
     }
 
-    protected OutputStream open(
-        OutputStream        out,
-        ASN1EncodableVector recipientInfos,
-        OutputEncryptor     encryptor)
-        throws CMSException
-    {
-        try
-        {
-            //
-            // ContentInfo
-            //
-            BERSequenceGenerator cGen = new BERSequenceGenerator(out);
-
-            cGen.addObject(CMSObjectIdentifiers.envelopedData);
-
-            //
-            // Encrypted Data
-            //
-            BERSequenceGenerator envGen = new BERSequenceGenerator(cGen.getRawOutputStream(), 0, true);
-
-            envGen.addObject(getVersion());
-
-            if (_berEncodeRecipientSet)
-            {
-                envGen.getRawOutputStream().write(new BERSet(recipientInfos).getEncoded());
-            }
-            else
-            {
-                envGen.getRawOutputStream().write(new DERSet(recipientInfos).getEncoded());
-            }
-
-            BERSequenceGenerator eiGen = new BERSequenceGenerator(envGen.getRawOutputStream());
-
-            eiGen.addObject(CMSObjectIdentifiers.data);
-
-            AlgorithmIdentifier encAlgId = encryptor.getAlgorithmIdentifier();
-
-            eiGen.getRawOutputStream().write(encAlgId.getEncoded());
-
-            OutputStream octetStream = CMSUtils.createBEROctetOutputStream(
-                eiGen.getRawOutputStream(), 0, false, _bufferSize);
-
-            return new CmsEnvelopedDataOutputStream(encryptor.getOutputStream(octetStream), cGen, envGen, eiGen);
-        }
-        catch (IOException e)
-        {
-            throw new CMSException("exception decoding algorithm parameters.", e);
-        }
-    }
-
     /**
      * generate an enveloped object that contains an CMS Enveloped Data
      * object using the given provider.
-     * @throws IOException
-     * @deprecated
+     * @throws IOException 
      */
     public OutputStream open(
         OutputStream    out,
@@ -377,9 +315,6 @@ public class CMSEnvelopedDataStreamGenerator
         return open(out, encryptionOID, CMSUtils.getProvider(provider));
     }
 
-    /**
-     * @deprecated
-     */
     public OutputStream open(
         OutputStream    out,
         String          encryptionOID,
@@ -396,7 +331,6 @@ public class CMSEnvelopedDataStreamGenerator
     /**
      * generate an enveloped object that contains an CMS Enveloped Data
      * object using the given provider.
-     * @deprecated
      */
     public OutputStream open(
         OutputStream    out,
@@ -411,7 +345,6 @@ public class CMSEnvelopedDataStreamGenerator
     /**
      * generate an enveloped object that contains an CMS Enveloped Data
      * object using the given provider.
-     * @deprecated
      */
     public OutputStream open(
         OutputStream    out,
@@ -447,7 +380,7 @@ public class CMSEnvelopedDataStreamGenerator
     public OutputStream open(
         ASN1ObjectIdentifier dataType,
         OutputStream         out,
-        OutputEncryptor      encryptor)
+        OutputEncryptor encryptor)
         throws CMSException, IOException
     {
         return doOpen(dataType, out, encryptor);

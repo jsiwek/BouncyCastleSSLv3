@@ -1,19 +1,9 @@
 package org.bouncycastle.mail.smime;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.PrivateKey;
-import java.security.Provider;
-import java.security.PublicKey;
-import java.security.cert.CertificateEncodingException;
-import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import org.bouncycastle.asn1.ASN1EncodableVector;
+import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
+import org.bouncycastle.cms.CMSEnvelopedDataStreamGenerator;
+import org.bouncycastle.cms.CMSException;
 
 import javax.activation.CommandMap;
 import javax.activation.MailcapCommandMap;
@@ -21,19 +11,16 @@ import javax.crypto.SecretKey;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMessage;
-
-import org.bouncycastle.asn1.ASN1EncodableVector;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.cms.CMSEnvelopedDataGenerator;
-import org.bouncycastle.cms.CMSEnvelopedDataStreamGenerator;
-import org.bouncycastle.cms.CMSException;
-import org.bouncycastle.cms.RecipientInfoGenerator;
-import org.bouncycastle.cms.jcajce.JceCMSContentEncryptorBuilder;
-import org.bouncycastle.cms.jcajce.JceKEKRecipientInfoGenerator;
-import org.bouncycastle.cms.jcajce.JceKeyAgreeRecipientInfoGenerator;
-import org.bouncycastle.cms.jcajce.JceKeyTransRecipientInfoGenerator;
-import org.bouncycastle.operator.OperatorCreationException;
-import org.bouncycastle.operator.OutputEncryptor;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.security.AlgorithmParameters;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Provider;
+import java.security.cert.X509Certificate;
 
 /**
  * General class for generating a pkcs7-mime message.
@@ -82,7 +69,6 @@ public class SMIMEEnvelopedGenerator
     private static final String ENCRYPTED_CONTENT_TYPE = "application/pkcs7-mime; name=\"smime.p7m\"; smime-type=enveloped-data";
     
     private EnvelopedGenerator fact;
-    private List               recipients = new ArrayList();
 
     static
     {
@@ -111,33 +97,13 @@ public class SMIMEEnvelopedGenerator
     }
 
     /**
-     * add a recipientInfoGenerator.
-     */
-    public void addRecipientInfoGenerator(
-        RecipientInfoGenerator recipientInfoGen)
-        throws IllegalArgumentException
-    {
-        fact.addRecipientInfoGenerator(recipientInfoGen);
-    }
-
-    /**
      * add a recipient.
-     * @deprecated use addRecipientInfoGenerator()
      */
     public void addKeyTransRecipient(
         X509Certificate cert)
         throws IllegalArgumentException
     {
-        try
-        {
-            JceKeyTransRecipientInfoGenerator infoGenerator = new JceKeyTransRecipientInfoGenerator(cert);
-            recipients.add(infoGenerator);
-            fact.addRecipientInfoGenerator(infoGenerator);
-        }
-        catch (CertificateEncodingException e)
-        {
-            throw new IllegalArgumentException(e.toString());
-        }
+        fact.addKeyTransRecipient(cert);
     }
 
     /**
@@ -145,30 +111,24 @@ public class SMIMEEnvelopedGenerator
      *
      * @param key the recipient's public key
      * @param subKeyId the subject key id for the recipient's public key
-     * @deprecated use addRecipientInfoGenerator()
      */
     public void addKeyTransRecipient(
         PublicKey   key,
         byte[]      subKeyId)
         throws IllegalArgumentException
     {
-        JceKeyTransRecipientInfoGenerator infoGenerator = new JceKeyTransRecipientInfoGenerator(subKeyId, key);
-        recipients.add(infoGenerator);
-        fact.addRecipientInfoGenerator(infoGenerator);
+        fact.addKeyTransRecipient(key, subKeyId);
     }
 
     /**
      * add a KEK recipient.
-     * @deprecated use addRecipientInfoGenerator()
      */
     public void addKEKRecipient(
         SecretKey   key,
         byte[]      keyIdentifier)
         throws IllegalArgumentException
     {
-        JceKEKRecipientInfoGenerator infoGenerator = new JceKEKRecipientInfoGenerator(keyIdentifier, key);
-        recipients.add(infoGenerator);
-        fact.addRecipientInfoGenerator(infoGenerator);
+        fact.addKEKRecipient(key, keyIdentifier);
     }
 
     /**
@@ -179,7 +139,6 @@ public class SMIMEEnvelopedGenerator
      * @param recipientCert recipient's public key certificate.
      * @param cekWrapAlgorithm OID for key wrapping algorithm to use.
      * @param provider provider to use for the agreement calculation.
-     * @deprecated use addRecipientInfoGenerator()
      */
     public void addKeyAgreementRecipient(
         String           agreementAlgorithm,
@@ -190,7 +149,7 @@ public class SMIMEEnvelopedGenerator
         String           provider)
         throws NoSuchProviderException, NoSuchAlgorithmException, InvalidKeyException
     {
-        this.addKeyAgreementRecipient(agreementAlgorithm, senderPrivateKey, senderPublicKey, recipientCert, cekWrapAlgorithm, provider);
+        fact.addKeyAgreementRecipient(agreementAlgorithm, senderPrivateKey, senderPublicKey, recipientCert, cekWrapAlgorithm, provider);
     }
 
     /**
@@ -201,7 +160,6 @@ public class SMIMEEnvelopedGenerator
      * @param recipientCert recipient's public key certificate.
      * @param cekWrapAlgorithm OID for key wrapping algorithm to use.
      * @param provider provider to use for the agreement calculation.
-     * @deprecated use addRecipientInfoGenerator()
      */
     public void addKeyAgreementRecipient(
         String           agreementAlgorithm,
@@ -212,21 +170,7 @@ public class SMIMEEnvelopedGenerator
         Provider         provider)
         throws NoSuchProviderException, NoSuchAlgorithmException, InvalidKeyException
     {
-        try
-        {
-            JceKeyAgreeRecipientInfoGenerator infoGenerator = new JceKeyAgreeRecipientInfoGenerator(new ASN1ObjectIdentifier(agreementAlgorithm), senderPrivateKey, senderPublicKey, new ASN1ObjectIdentifier(cekWrapAlgorithm), Collections.singletonList(recipientCert));
-
-            if (provider != null)
-            {
-                infoGenerator.setProvider(provider);
-            }
-
-            fact.addRecipientInfoGenerator(infoGenerator);
-        }
-        catch (CMSException e)
-        {
-            throw new NoSuchAlgorithmException("cannot set up generator: " + e);
-        }
+        fact.addKeyAgreementRecipient(agreementAlgorithm, senderPrivateKey, senderPublicKey, recipientCert, cekWrapAlgorithm, provider);
     }
 
     /**
@@ -243,7 +187,7 @@ public class SMIMEEnvelopedGenerator
      */
     private MimeBodyPart make(
         MimeBodyPart    content,
-        ASN1ObjectIdentifier encryptionOID,
+        String          encryptionOID,
         int             keySize,
         Provider        provider)
         throws NoSuchAlgorithmException, SMIMEException
@@ -251,7 +195,7 @@ public class SMIMEEnvelopedGenerator
         //
         // check the base algorithm and provider is available
         //
-        createSymmetricKeyGenerator(encryptionOID.getId(), provider);
+        createSymmetricKeyGenerator(encryptionOID, provider);
                 
         try
         {  
@@ -267,56 +211,13 @@ public class SMIMEEnvelopedGenerator
         }
         catch (MessagingException e)
         {
-            throw new SMIMEException("exception putting S/MIME message together.", e);
-        }
-        catch (CMSException e)
-        {
-            throw new SMIMEException("exception putting envelope together.", e);
-        }
-    }
-
-     /**
-     * if we get here we expect the Mime body part to be well defined.
-     */
-    private MimeBodyPart make(
-        MimeBodyPart    content,
-        OutputEncryptor encryptor)
-        throws NoSuchAlgorithmException, SMIMEException
-    {
-        try
-        {
-            MimeBodyPart data = new MimeBodyPart();
-
-            data.setContent(new ContentEncryptor(content, encryptor), ENCRYPTED_CONTENT_TYPE);
-            data.addHeader("Content-Type", ENCRYPTED_CONTENT_TYPE);
-            data.addHeader("Content-Disposition", "attachment; filename=\"smime.p7m\"");
-            data.addHeader("Content-Description", "S/MIME Encrypted Message");
-            data.addHeader("Content-Transfer-Encoding", encoding);
-
-            return data;
-        }
-        catch (MessagingException e)
-        {
             throw new SMIMEException("exception putting multi-part together.", e);
         }
     }
 
     /**
      * generate an enveloped object that contains an SMIME Enveloped
-     * object using the given content encryptor
-     */
-    public MimeBodyPart generate(
-        MimeBodyPart     content,
-        OutputEncryptor  encryptor)
-        throws NoSuchAlgorithmException, NoSuchProviderException, SMIMEException
-    {
-        return make(makeContentBodyPart(content), encryptor);
-    }
-
-    /**
-     * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeBodyPart    content,
@@ -324,13 +225,12 @@ public class SMIMEEnvelopedGenerator
         String          provider)
         throws NoSuchAlgorithmException, NoSuchProviderException, SMIMEException
     {
-        return make(makeContentBodyPart(content), new ASN1ObjectIdentifier(encryptionOID), 0, SMIMEUtil.getProvider(provider));
+        return make(makeContentBodyPart(content), encryptionOID, 0, SMIMEUtil.getProvider(provider));
     }
 
     /**
      * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeBodyPart    content,
@@ -338,14 +238,13 @@ public class SMIMEEnvelopedGenerator
         Provider        provider)
         throws NoSuchAlgorithmException, SMIMEException
     {
-        return make(makeContentBodyPart(content), new ASN1ObjectIdentifier(encryptionOID), 0, provider);
+        return make(makeContentBodyPart(content), encryptionOID, 0, provider);
     }
 
     /**
      * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider from the contents of the passed in
      * message
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeMessage     message,
@@ -360,7 +259,6 @@ public class SMIMEEnvelopedGenerator
      * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider from the contents of the passed in
      * message
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeMessage     message,
@@ -377,14 +275,13 @@ public class SMIMEEnvelopedGenerator
             throw new SMIMEException("unable to save message", e);
         }
                         
-        return make(makeContentBodyPart(message),new ASN1ObjectIdentifier(encryptionOID), 0, provider);
+        return make(makeContentBodyPart(message), encryptionOID, 0, provider);
     }
 
     /**
      * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider. The size of the encryption key
      * is determined by keysize.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeBodyPart    content,
@@ -400,7 +297,6 @@ public class SMIMEEnvelopedGenerator
      * generate an enveloped object that contains an SMIME Enveloped
      * object using the given provider. The size of the encryption key
      * is determined by keysize.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeBodyPart    content,
@@ -409,7 +305,7 @@ public class SMIMEEnvelopedGenerator
         Provider        provider)
         throws NoSuchAlgorithmException, NoSuchProviderException, SMIMEException
     {
-        return make(makeContentBodyPart(content), new ASN1ObjectIdentifier(encryptionOID), keySize, provider);
+        return make(makeContentBodyPart(content), encryptionOID, keySize, provider);
     }
 
     /**
@@ -417,7 +313,6 @@ public class SMIMEEnvelopedGenerator
      * object using the given provider from the contents of the passed in
      * message. The size of the encryption key used to protect the message
      * is determined by keysize.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeMessage     message,
@@ -434,7 +329,6 @@ public class SMIMEEnvelopedGenerator
      * object using the given provider from the contents of the passed in
      * message. The size of the encryption key used to protect the message
      * is determined by keysize.
-     * @deprecated
      */
     public MimeBodyPart generate(
         MimeMessage     message,
@@ -452,68 +346,31 @@ public class SMIMEEnvelopedGenerator
             throw new SMIMEException("unable to save message", e);
         }
                         
-        return make(makeContentBodyPart(message), new ASN1ObjectIdentifier(encryptionOID), keySize, provider);
+        return make(makeContentBodyPart(message), encryptionOID, keySize, provider);
     }
     
     private class ContentEncryptor
         implements SMIMEStreamingProcessor
     {
         private final MimeBodyPart _content;
-        private OutputEncryptor _encryptor;
-
+        private final String _encryptionOid;
+        private final int    _keySize;
+        private final Provider _provider;
+        
         private boolean _firstTime = true;
         
         ContentEncryptor(
             MimeBodyPart content,
-            ASN1ObjectIdentifier       encryptionOid,
+            String       encryptionOid,
             int          keySize,
             Provider     provider)
-            throws CMSException
         {
             _content = content;
-
-            if (keySize == 0)  // use the default
-            {
-                _encryptor = new JceCMSContentEncryptorBuilder(encryptionOid).setProvider(provider).build();
-            }
-            else
-            {
-                _encryptor = new JceCMSContentEncryptorBuilder(encryptionOid, keySize).setProvider(provider).build();
-            }
-
-            if (provider != null)
-            {
-                for (Iterator it = recipients.iterator(); it.hasNext();)
-                {
-                    RecipientInfoGenerator rd = (RecipientInfoGenerator)it.next();
-
-                    try
-                    {
-                        if (rd instanceof JceKeyTransRecipientInfoGenerator)
-                        {
-                            ((JceKeyTransRecipientInfoGenerator)rd).setProvider(provider);
-                        }
-                        else if (rd instanceof JceKEKRecipientInfoGenerator)
-                        {
-                            ((JceKEKRecipientInfoGenerator)rd).setProvider(provider);
-                        }
-                    }
-                    catch (OperatorCreationException e)
-                    {
-                        throw new CMSException("cannot create recipient: " + e.getMessage(), e);
-                    }
-                }
-            }
+            _encryptionOid = encryptionOid;
+            _keySize = keySize;
+            _provider = provider;
         }
-
-        ContentEncryptor(
-            MimeBodyPart content,
-            OutputEncryptor encryptor)
-        {
-            _content = content;
-            _encryptor = encryptor;
-        }
-
+    
         public void write(OutputStream out)
             throws IOException
         {
@@ -523,13 +380,20 @@ public class SMIMEEnvelopedGenerator
             {
                 if (_firstTime)
                 {
-                    encrypted = fact.open(out, _encryptor);
+                    if (_keySize == 0)  // use the default
+                    {
+                        encrypted = fact.open(out, _encryptionOid, _provider);
+                    }
+                    else
+                    {
+                        encrypted = fact.open(out, _encryptionOid, _keySize, _provider);
+                    }
                     
                     _firstTime = false;
                 }
                 else
                 {
-                    encrypted = fact.regenerate(out, _encryptor);
+                    encrypted = fact.regenerate(out, _provider);
                 }
 
                 _content.getDataHandler().setCommandMap(addCommands(CommandMap.getDefaultCommandMap()));
@@ -539,6 +403,14 @@ public class SMIMEEnvelopedGenerator
                 encrypted.close();
             }
             catch (MessagingException e)
+            {
+                throw new WrappingIOException(e.toString(), e);
+            }
+            catch (NoSuchAlgorithmException e)
+            {
+                throw new WrappingIOException(e.toString(), e);
+            }
+            catch (NoSuchProviderException e)
             {
                 throw new WrappingIOException(e.toString(), e);
             }
@@ -552,28 +424,34 @@ public class SMIMEEnvelopedGenerator
     private class EnvelopedGenerator
         extends CMSEnvelopedDataStreamGenerator
     {
-        private ASN1ObjectIdentifier dataType;
-        private ASN1EncodableVector  recipientInfos;
+        private String _encryptionOID;
+        private SecretKey _encKey;
+        private AlgorithmParameters _params;
+        private ASN1EncodableVector _recipientInfos;
 
         protected OutputStream open(
-            ASN1ObjectIdentifier dataType,
-            OutputStream         out,
-            ASN1EncodableVector  recipientInfos,
-            OutputEncryptor      encryptor)
-            throws IOException
+            OutputStream        out,
+            String              encryptionOID,
+            SecretKey           encKey,
+            AlgorithmParameters params,
+            ASN1EncodableVector recepientInfos,
+            Provider            provider)
+            throws NoSuchAlgorithmException, CMSException
         {
-            this.dataType = dataType;
-            this.recipientInfos = recipientInfos;
+            _encryptionOID = encryptionOID;
+            _encKey = encKey;
+            _params = params;
+            _recipientInfos = recepientInfos;
 
-            return super.open(dataType, out, recipientInfos, encryptor);
+            return super.open(out, encryptionOID, encKey, params, recepientInfos, provider);
         }
 
         OutputStream regenerate(
             OutputStream out,
-            OutputEncryptor     encryptor)
-            throws IOException
+            Provider     provider)
+            throws NoSuchAlgorithmException, NoSuchProviderException, CMSException
         {
-            return super.open(dataType, out, recipientInfos, encryptor);
+            return super.open(out, _encryptionOID, _encKey, _params, _recipientInfos, provider);
         }
     }
 

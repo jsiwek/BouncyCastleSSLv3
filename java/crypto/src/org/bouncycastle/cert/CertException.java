@@ -1,8 +1,5 @@
 package org.bouncycastle.cert;
 
-/**
- * General checked Exception thrown in the cert package and its sub-packages.
- */
 public class CertException
     extends Exception
 {

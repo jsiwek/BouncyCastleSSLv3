@@ -20,7 +20,6 @@ import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.Attribute;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
-import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
@@ -28,6 +27,9 @@ import org.bouncycastle.asn1.x509.X509Extension;
 import org.bouncycastle.asn1.x509.X509Extensions;
 import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
+import org.bouncycastle.cert.pkcs.PKCS10CertificationRequestBuilder;
+import org.bouncycastle.cert.pkcs.PKCS10CertificationRequestHolder;
+import org.bouncycastle.cert.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.bouncycastle.jce.ECGOST3410NamedCurveTable;
 import org.bouncycastle.jce.ECNamedCurveTable;
 import org.bouncycastle.jce.PKCS10CertificationRequest;
@@ -43,9 +45,6 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.ContentVerifierProvider;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
-import org.bouncycastle.pkcs.PKCS10CertificationRequestBuilder;
-import org.bouncycastle.pkcs.PKCS10CertificationRequestHolder;
-import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequestBuilder;
 import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
 import org.bouncycastle.util.test.SimpleTest;
@@ -176,7 +175,7 @@ public class PKCS10Test
 
         ContentSigner signer = new JcaContentSignerBuilder(algorithm).setProvider(BC).build(privKey);
 
-        PKCS10CertificationRequestBuilder reqBuilder = new JcaPKCS10CertificationRequestBuilder(new X500Name("CN=XXX"), pubKey);
+        PKCS10CertificationRequestBuilder reqBuilder = new JcaPKCS10CertificationRequestBuilder(new X509Name("CN=XXX"), pubKey);
         PKCS10CertificationRequestHolder  req = reqBuilder.build(signer);
 
         ContentVerifierProvider verifier = new JcaContentVerifierProviderBuilder().setProvider(BC).build(pubKey);
@@ -197,7 +196,7 @@ public class PKCS10Test
         //
         ((ECPointEncoder)pubKey).setPointFormat("UNCOMPRESSED");
 
-        reqBuilder = new JcaPKCS10CertificationRequestBuilder(new X500Name("CN=XXX"), pubKey);
+        reqBuilder = new JcaPKCS10CertificationRequestBuilder(new X509Name("CN=XXX"), pubKey);
         req = reqBuilder.build(signer);
 
         if (!req.isSignatureValid(verifier))

@@ -6,7 +6,6 @@ import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
 
 import org.bouncycastle.util.io.pem.PemGenerationException;
-import org.bouncycastle.util.io.pem.PemObjectGenerator;
 import org.bouncycastle.util.io.pem.PemWriter;
 
 /**
@@ -53,13 +52,6 @@ public class PEMWriter
 
             throw e;
         }
-    }
-
-    public void writeObject(
-        PemObjectGenerator obj)
-        throws IOException
-    {
-        super.writeObject(obj);
     }
 
     public void writeObject(

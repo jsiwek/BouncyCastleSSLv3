@@ -1,6 +1,5 @@
 package org.bouncycastle.cert.jcajce;
 
-import java.io.IOException;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -11,12 +10,6 @@ import java.util.List;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.util.CollectionStore;
 
-/**
- * Class for storing Certificates for later lookup.
- * <p>
- * The class will convert X509Certificate objects into X509CertificateHolder objects.
- * </p>
- */
 public class JcaCertStore
     extends CollectionStore
 {
@@ -44,14 +37,7 @@ public class JcaCertStore
             {
                 X509Certificate cert = (X509Certificate)o;
 
-                try
-                {
-                    list.add(new X509CertificateHolder(cert.getEncoded()));
-                }
-                catch (IOException e)
-                {
-                    throw new CertificateEncodingException("unable to read encoding: " + e.getMessage());
-                }
+                list.add(new X509CertificateHolder(cert.getEncoded()));
             }
             else
             {

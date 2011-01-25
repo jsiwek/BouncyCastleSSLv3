@@ -50,33 +50,41 @@ public class KeyAgreeRecipientInformation
     static void readRecipientInfo(List infos, KeyAgreeRecipientInfo info,
         CMSSecureReadable secureReadable)
     {
-        ASN1Sequence s = info.getRecipientEncryptedKeys();
-
-        for (int i = 0; i < s.size(); ++i)
+        try
         {
-            RecipientEncryptedKey id = RecipientEncryptedKey.getInstance(
-                s.getObjectAt(i));
+            ASN1Sequence s = info.getRecipientEncryptedKeys();
 
-            RecipientId rid;
-
-            KeyAgreeRecipientIdentifier karid = id.getIdentifier();
-            IssuerAndSerialNumber iAndSN = karid.getIssuerAndSerialNumber();
-
-            if (iAndSN != null)
+            for (int i = 0; i < s.size(); ++i)
             {
-                rid = new KeyAgreeRecipientId(iAndSN.getName(), iAndSN.getSerialNumber().getValue());
+                RecipientEncryptedKey id = RecipientEncryptedKey.getInstance(
+                    s.getObjectAt(i));
+
+                RecipientId rid = new RecipientId();
+
+                KeyAgreeRecipientIdentifier karid = id.getIdentifier();
+                IssuerAndSerialNumber iAndSN = karid.getIssuerAndSerialNumber();
+
+                if (iAndSN != null)
+                {
+                    rid.setIssuer(iAndSN.getName().getEncoded());
+                    rid.setSerialNumber(iAndSN.getSerialNumber().getValue());
+                }
+                else
+                {
+                    RecipientKeyIdentifier rKeyID = karid.getRKeyID();
+
+                    // Note: 'date' and 'other' fields of RecipientKeyIdentifier appear to be only informational 
+
+                    rid.setSubjectKeyIdentifier(rKeyID.getSubjectKeyIdentifier().getOctets());
+                }
+
+                infos.add(new KeyAgreeRecipientInformation(info, rid, id.getEncryptedKey(),
+                    secureReadable));
             }
-            else
-            {
-                RecipientKeyIdentifier rKeyID = karid.getRKeyID();
-
-                // Note: 'date' and 'other' fields of RecipientKeyIdentifier appear to be only informational
-
-                rid = new KeyAgreeRecipientId(rKeyID.getSubjectKeyIdentifier().getOctets());
-            }
-
-            infos.add(new KeyAgreeRecipientInformation(info, rid, id.getEncryptedKey(),
-                secureReadable));
+        }
+        catch (IOException e)
+        {
+            throw new IllegalArgumentException("invalid rid in KeyAgreeRecipientInformation");
         }
     }
 

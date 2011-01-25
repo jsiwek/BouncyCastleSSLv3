@@ -1,8 +1,8 @@
 package org.bouncycastle.x509.extension;
 
 import java.io.IOException;
-import java.security.InvalidKeyException;
 import java.security.PublicKey;
+import java.security.cert.CertificateParsingException;
 
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.x509.SubjectKeyIdentifier;
@@ -29,7 +29,7 @@ public class SubjectKeyIdentifierStructure
     
     private static ASN1OctetString fromPublicKey(
         PublicKey pubKey)
-        throws InvalidKeyException
+        throws CertificateParsingException
     {
         try
         {
@@ -39,13 +39,13 @@ public class SubjectKeyIdentifierStructure
         }
         catch (Exception e)
         {
-            throw new InvalidKeyException("Exception extracting key details: " + e.toString());
+            throw new CertificateParsingException("Exception extracting certificate details: " + e.toString());
         }
     }
     
     public SubjectKeyIdentifierStructure(
         PublicKey pubKey)
-        throws InvalidKeyException
+        throws CertificateParsingException
     {
         super(fromPublicKey(pubKey));
     }

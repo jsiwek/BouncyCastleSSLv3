@@ -11,14 +11,12 @@ import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
 /**
- * The LDSSecurityObject object (V1.8).
+ * The LDSSecurityObject object.
  * <pre>
  * LDSSecurityObject ::= SEQUENCE {
  *   version                LDSSecurityObjectVersion,
  *   hashAlgorithm          DigestAlgorithmIdentifier,
- *   dataGroupHashValues    SEQUENCE SIZE (2..ub-DataGroups) OF DataHashGroup,
- *   ldsVersionInfo         LDSVersionInfo OPTIONAL
- *   -- if present, version MUST be v1 }
+ *   dataGroupHashValues    SEQUENCE SIZE (2..ub-DataGroups) OF DataHashGroup}
  *   
  * DigestAlgorithmIdentifier ::= AlgorithmIdentifier,
  * 
@@ -30,29 +28,30 @@ public class LDSSecurityObject
     extends ASN1Encodable 
     implements ICAOObjectIdentifiers    
 {
+    
     public static final int ub_DataGroups = 16;
     
-    private DERInteger version = new DERInteger(0);
-    private AlgorithmIdentifier digestAlgorithmIdentifier;
-    private DataGroupHash[] datagroupHash;
-    private LDSVersionInfo versionInfo;
+    DERInteger version = new DERInteger(0);
+    AlgorithmIdentifier digestAlgorithmIdentifier; 
+    DataGroupHash[] datagroupHash;            
 
     public static LDSSecurityObject getInstance(
         Object obj)
     {
-        if (obj instanceof LDSSecurityObject)
+        if (obj == null || obj instanceof LDSSecurityObject)
         {
             return (LDSSecurityObject)obj;
         }
-        else if (obj != null)
+
+        if (obj instanceof ASN1Sequence)
         {
             return new LDSSecurityObject(ASN1Sequence.getInstance(obj));            
         }
         
-        throw new IllegalArgumentException("null object in getInstance()");
+        throw new IllegalArgumentException("unknown object in getInstance: " + obj.getClass().getName());
     }    
     
-    private LDSSecurityObject(
+    public LDSSecurityObject(
         ASN1Sequence seq)
     {
         if (seq == null || seq.size() == 0)
@@ -69,44 +68,26 @@ public class LDSSecurityObject
       
         ASN1Sequence datagroupHashSeq = ASN1Sequence.getInstance(e.nextElement());
 
-        if (version.getValue().intValue() == 1)
-        {
-            versionInfo = LDSVersionInfo.getInstance(e.nextElement());
-        }
-
         checkDatagroupHashSeqSize(datagroupHashSeq.size());        
         
         datagroupHash = new DataGroupHash[datagroupHashSeq.size()];
         for (int i= 0; i< datagroupHashSeq.size();i++)
         {
             datagroupHash[i] = DataGroupHash.getInstance(datagroupHashSeq.getObjectAt(i));
-        }
+        } 
+        
     }
 
     public LDSSecurityObject(
         AlgorithmIdentifier digestAlgorithmIdentifier, 
         DataGroupHash[]       datagroupHash)
     {
-        this.version = new DERInteger(0);
         this.digestAlgorithmIdentifier = digestAlgorithmIdentifier;
         this.datagroupHash = datagroupHash;
         
         checkDatagroupHashSeqSize(datagroupHash.length);                      
     }    
-
-    public LDSSecurityObject(
-        AlgorithmIdentifier digestAlgorithmIdentifier,
-        DataGroupHash[]     datagroupHash,
-        LDSVersionInfo      versionInfo)
-    {
-        this.version = new DERInteger(1);
-        this.digestAlgorithmIdentifier = digestAlgorithmIdentifier;
-        this.datagroupHash = datagroupHash;
-        this.versionInfo = versionInfo;
-
-        checkDatagroupHashSeqSize(datagroupHash.length);
-    }
-
+        
     private void checkDatagroupHashSeqSize(int size)
     {
         if ((size < 2) || (size > ub_DataGroups))
@@ -114,12 +95,7 @@ public class LDSSecurityObject
                throw new IllegalArgumentException("wrong size in DataGroupHashValues : not in (2.."+ ub_DataGroups +")");
         }
     }  
-
-    public int getVersion()
-    {
-        return version.getValue().intValue();
-    }
-
+    
     public AlgorithmIdentifier getDigestAlgorithmIdentifier()
     {
         return digestAlgorithmIdentifier;
@@ -128,11 +104,6 @@ public class LDSSecurityObject
     public DataGroupHash[] getDatagroupHash()
     {
         return datagroupHash;
-    }
-
-    public LDSVersionInfo getVersionInfo()
-    {
-        return versionInfo;
     }
 
     public DERObject toASN1Object() 
@@ -148,12 +119,7 @@ public class LDSSecurityObject
             seqname.add(datagroupHash[i]);
         }            
         seq.add(new DERSequence(seqname));                   
-
-        if (versionInfo != null)
-        {
-            seq.add(versionInfo);
-        }
-
+        
         return new DERSequence(seq);
-    }
+    }          
 }

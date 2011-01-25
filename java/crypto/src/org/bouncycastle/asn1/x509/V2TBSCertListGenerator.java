@@ -12,7 +12,6 @@ import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERTaggedObject;
 import org.bouncycastle.asn1.DERUTCTime;
-import org.bouncycastle.asn1.x500.X500Name;
 
 /**
  * Generator for Version 2 TBSCertList structures.
@@ -62,11 +61,6 @@ public class V2TBSCertListGenerator
         X509Name    issuer)
     {
         this.issuer = issuer;
-    }
-
-    public void setIssuer(X500Name issuer)
-    {
-        this.issuer = X509Name.getInstance(issuer);
     }
 
     public void setThisUpdate(

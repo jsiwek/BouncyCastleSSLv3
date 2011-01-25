@@ -1,27 +1,9 @@
 package org.bouncycastle.cms;
 
-import java.io.IOException;
-import java.security.GeneralSecurityException;
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.PrivateKey;
-import java.security.Provider;
-import java.security.PublicKey;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.List;
-
-import javax.crypto.Cipher;
-import javax.crypto.KeyAgreement;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.SecretKey;
-
 import org.bouncycastle.asn1.ASN1Object;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
+import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.cms.IssuerAndSerialNumber;
 import org.bouncycastle.asn1.cms.KeyAgreeRecipientIdentifier;
 import org.bouncycastle.asn1.cms.KeyAgreeRecipientInfo;
@@ -37,6 +19,25 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jce.spec.MQVPrivateKeySpec;
 import org.bouncycastle.jce.spec.MQVPublicKeySpec;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.security.GeneralSecurityException;
+import java.security.InvalidKeyException;
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
+import java.security.Provider;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyAgreement;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+
 /**
  * the RecipientInfo class for a recipient who has been sent a message
  * encrypted using key agreement.
@@ -47,40 +48,67 @@ public class KeyAgreeRecipientInformation
     private KeyAgreeRecipientInfo info;
     private ASN1OctetString       encryptedKey;
 
-    static void readRecipientInfo(List infos, KeyAgreeRecipientInfo info,
-        CMSSecureReadable secureReadable)
+    /**
+     * @deprecated
+     */
+    public KeyAgreeRecipientInformation(
+        KeyAgreeRecipientInfo info,
+        AlgorithmIdentifier   encAlg,
+        InputStream data)
     {
+        this(info, encAlg, null, null, data);
+    }
+
+    /**
+     * @deprecated
+     */
+    public KeyAgreeRecipientInformation(
+        KeyAgreeRecipientInfo info,
+        AlgorithmIdentifier   encAlg,
+        AlgorithmIdentifier   macAlg,
+        InputStream data)
+    {
+        this(info, encAlg, macAlg, null, data);
+    }
+
+    KeyAgreeRecipientInformation(
+        KeyAgreeRecipientInfo info,
+        AlgorithmIdentifier   encAlg,
+        AlgorithmIdentifier   macAlg,
+        AlgorithmIdentifier   authEncAlg,
+        InputStream data)
+    {
+        super(encAlg, macAlg, authEncAlg, info.getKeyEncryptionAlgorithm(), data);
+
+        this.info = info;
+        this.rid = new RecipientId();
+
         try
         {
-            ASN1Sequence s = info.getRecipientEncryptedKeys();
+            ASN1Sequence s = this.info.getRecipientEncryptedKeys();
 
-            for (int i = 0; i < s.size(); ++i)
+            // TODO Handle the case of more than one encrypted key
+            RecipientEncryptedKey id = RecipientEncryptedKey.getInstance(
+                    s.getObjectAt(0));
+
+            KeyAgreeRecipientIdentifier karid = id.getIdentifier();
+
+            IssuerAndSerialNumber iAndSN = karid.getIssuerAndSerialNumber();
+            if (iAndSN != null)
             {
-                RecipientEncryptedKey id = RecipientEncryptedKey.getInstance(
-                    s.getObjectAt(i));
-
-                RecipientId rid = new RecipientId();
-
-                KeyAgreeRecipientIdentifier karid = id.getIdentifier();
-                IssuerAndSerialNumber iAndSN = karid.getIssuerAndSerialNumber();
-
-                if (iAndSN != null)
-                {
-                    rid.setIssuer(iAndSN.getName().getEncoded());
-                    rid.setSerialNumber(iAndSN.getSerialNumber().getValue());
-                }
-                else
-                {
-                    RecipientKeyIdentifier rKeyID = karid.getRKeyID();
-
-                    // Note: 'date' and 'other' fields of RecipientKeyIdentifier appear to be only informational 
-
-                    rid.setSubjectKeyIdentifier(rKeyID.getSubjectKeyIdentifier().getOctets());
-                }
-
-                infos.add(new KeyAgreeRecipientInformation(info, rid, id.getEncryptedKey(),
-                    secureReadable));
+                rid.setIssuer(iAndSN.getName().getEncoded());
+                rid.setSerialNumber(iAndSN.getSerialNumber().getValue());
             }
+            else
+            {
+                RecipientKeyIdentifier rKeyID = karid.getRKeyID();
+
+                // Note: 'date' and 'other' fields of RecipientKeyIdentifier appear to be only informational 
+
+                rid.setSubjectKeyIdentifier(rKeyID.getSubjectKeyIdentifier().getOctets());
+            }
+
+            encryptedKey = id.getEncryptedKey();
         }
         catch (IOException e)
         {
@@ -88,27 +116,14 @@ public class KeyAgreeRecipientInformation
         }
     }
 
-    KeyAgreeRecipientInformation(
-        KeyAgreeRecipientInfo   info,
-        RecipientId             rid,
-        ASN1OctetString         encryptedKey,
-        CMSSecureReadable       secureReadable)
-    {
-        super(info.getKeyEncryptionAlgorithm(), secureReadable);
-
-        this.info = info;
-        this.rid = rid;
-        this.encryptedKey = encryptedKey;
-    }
-
-    private SubjectPublicKeyInfo getSenderPublicKeyInfo(AlgorithmIdentifier recKeyAlgId,
-        OriginatorIdentifierOrKey originator)
-        throws CMSException, IOException
+    private PublicKey getSenderPublicKey(Key receiverPrivateKey,
+        OriginatorIdentifierOrKey originator, Provider prov)
+        throws CMSException, GeneralSecurityException, IOException
     {
         OriginatorPublicKey opk = originator.getOriginatorKey();
         if (opk != null)
         {
-            return getPublicKeyInfoFromOriginatorPublicKey(recKeyAlgId, opk);
+            return getPublicKeyFromOriginatorPublicKey(receiverPrivateKey, opk, prov);
         }
 
         OriginatorId origID = new OriginatorId();
@@ -126,20 +141,25 @@ public class KeyAgreeRecipientInformation
             origID.setSubjectKeyIdentifier(ski.getKeyIdentifier());
         }
 
-        return getPublicKeyInfoFromOriginatorId(origID);
+        return getPublicKeyFromOriginatorId(origID, prov);
     }
 
-    private SubjectPublicKeyInfo getPublicKeyInfoFromOriginatorPublicKey(AlgorithmIdentifier recKeyAlgId,
-            OriginatorPublicKey originatorPublicKey)
+    private PublicKey getPublicKeyFromOriginatorPublicKey(Key receiverPrivateKey,
+            OriginatorPublicKey originatorPublicKey, Provider prov)
+            throws CMSException, GeneralSecurityException, IOException
     {
-        SubjectPublicKeyInfo pubInfo = new SubjectPublicKeyInfo(
-            recKeyAlgId,
-            originatorPublicKey.getPublicKey().getBytes());
+        PrivateKeyInfo privInfo = PrivateKeyInfo.getInstance(
+            ASN1Object.fromByteArray(receiverPrivateKey.getEncoded()));
 
-        return pubInfo;
+        SubjectPublicKeyInfo pubInfo = new SubjectPublicKeyInfo(
+            privInfo.getAlgorithmId(),
+            originatorPublicKey.getPublicKey().getBytes());
+        X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubInfo.getEncoded());
+        KeyFactory fact = KeyFactory.getInstance(keyEncAlg.getObjectId().getId(), prov.getName());
+        return fact.generatePublic(pubSpec);
     }
 
-    private SubjectPublicKeyInfo getPublicKeyInfoFromOriginatorId(OriginatorId origID)
+    private PublicKey getPublicKeyFromOriginatorId(OriginatorId origID, Provider prov)
             throws CMSException
     {
         // TODO Support all alternatives for OriginatorIdentifierOrKey
@@ -147,33 +167,11 @@ public class KeyAgreeRecipientInformation
         throw new CMSException("No support for 'originator' as IssuerAndSerialNumber or SubjectKeyIdentifier");
     }
 
-    private PublicKey getSenderPublicKey(Key receiverPrivateKey,
-        OriginatorIdentifierOrKey originator, Provider prov)
-        throws CMSException, GeneralSecurityException, IOException
-    {
-        SubjectPublicKeyInfo pubInfo = getSenderPublicKeyInfo(PrivateKeyInfo.getInstance(receiverPrivateKey.getEncoded()).getAlgorithmId(), originator);
-
-        X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubInfo.getEncoded());
-        KeyFactory fact = KeyFactory.getInstance(keyEncAlg.getAlgorithm().getId(), prov.getName());
-        return fact.generatePublic(pubSpec);
-    }
-
-    private PublicKey getPublicKeyFromOriginatorPublicKey(Key receiverPrivateKey,
-            OriginatorPublicKey originatorPublicKey, Provider prov)
-            throws CMSException, GeneralSecurityException, IOException
-    {
-        SubjectPublicKeyInfo pubInfo = getPublicKeyInfoFromOriginatorPublicKey(PrivateKeyInfo.getInstance(receiverPrivateKey.getEncoded()).getAlgorithmId(), originatorPublicKey);
-
-        X509EncodedKeySpec pubSpec = new X509EncodedKeySpec(pubInfo.getEncoded());
-        KeyFactory fact = KeyFactory.getInstance(keyEncAlg.getAlgorithm().getId(), prov.getName());
-        return fact.generatePublic(pubSpec);
-    }
-
     private SecretKey calculateAgreedWrapKey(String wrapAlg,
         PublicKey senderPublicKey, PrivateKey receiverPrivateKey, Provider prov)
         throws CMSException, GeneralSecurityException, IOException
     {
-        String agreeAlg = keyEncAlg.getAlgorithm().getId();
+        String agreeAlg = keyEncAlg.getObjectId().getId();
 
         if (agreeAlg.equals(CMSEnvelopedGenerator.ECMQV_SHA1KDF))
         {
@@ -188,7 +186,7 @@ public class KeyAgreeRecipientInformation
             receiverPrivateKey = new MQVPrivateKeySpec(receiverPrivateKey, receiverPrivateKey);
         }
 
-        KeyAgreement agreement = KeyAgreement.getInstance(agreeAlg, prov.getName());
+        KeyAgreement agreement = KeyAgreement.getInstance(agreeAlg, prov);
         agreement.init(receiverPrivateKey);
         agreement.doPhase(senderPublicKey, true);
         return agreement.generateSecret(wrapAlg);
@@ -198,9 +196,15 @@ public class KeyAgreeRecipientInformation
         Provider prov)
         throws GeneralSecurityException
     {
-        Cipher keyCipher = CMSEnvelopedHelper.INSTANCE.createSymmetricCipher(wrapAlg, prov);
+        AlgorithmIdentifier aid = getActiveAlgID();
+        String alg = aid.getObjectId().getId();
+        byte[] encKeyOctets = encryptedKey.getOctets();
+
+        // TODO Should we try alternate ways of unwrapping?
+        //   (see KeyTransRecipientInformation.getSessionKey)
+        Cipher keyCipher = Cipher.getInstance(wrapAlg, prov);
         keyCipher.init(Cipher.UNWRAP_MODE, agreedKey);
-        return keyCipher.unwrap(encryptedKey.getOctets(), getContentAlgorithmName(), Cipher.SECRET_KEY);
+        return keyCipher.unwrap(encKeyOctets, alg, Cipher.SECRET_KEY);
     }
 
     protected Key getSessionKey(Key receiverPrivateKey, Provider prov)
@@ -208,8 +212,8 @@ public class KeyAgreeRecipientInformation
     {
         try
         {
-            String wrapAlg = 
-                AlgorithmIdentifier.getInstance(keyEncAlg.getParameters()).getAlgorithm().getId();
+            String wrapAlg = DERObjectIdentifier.getInstance(
+                ASN1Sequence.getInstance(keyEncAlg.getParameters()).getObjectAt(0)).getId();
 
             PublicKey senderPublicKey = getSenderPublicKey(receiverPrivateKey,
                 info.getOriginator(), prov);
@@ -240,10 +244,8 @@ public class KeyAgreeRecipientInformation
             throw new CMSException("originator key invalid.", e);
         }
     }
-
     /**
      * decrypt the content and return it
-     * @deprecated use getContentStream(Recipient) method
      */
     public CMSTypedStream getContentStream(
         Key key,
@@ -253,10 +255,6 @@ public class KeyAgreeRecipientInformation
         return getContentStream(key, CMSUtils.getProvider(prov));
     }
 
-    /**
-     * decrypt the content and return it
-     * @deprecated use getContentStream(Recipient) method
-     */
     public CMSTypedStream getContentStream(
         Key key,
         Provider prov)
@@ -265,17 +263,5 @@ public class KeyAgreeRecipientInformation
         Key sKey = getSessionKey(key, prov);
 
         return getContentFromSessionKey(sKey, prov);
-    }
-
-    public CMSTypedStream getContentStream(Recipient recipient)
-        throws CMSException, IOException
-    {
-        KeyAgreeRecipient agreeRecipient = (KeyAgreeRecipient)recipient;
-        AlgorithmIdentifier    recKeyAlgId = agreeRecipient.getPrivateKeyAlgorithmIdentifier();
-
-        operator = ((KeyAgreeRecipient)recipient).getRecipientOperator(keyEncAlg, secureReadable.getAlgorithm(), getSenderPublicKeyInfo(recKeyAlgId,
-                info.getOriginator()), info.getUserKeyingMaterial(), encryptedKey.getOctets());
-
-        return new CMSTypedStream(operator.getInputStream(secureReadable.getInputStream()));
     }
 }

@@ -1,11 +1,11 @@
-/AttributeCertificateHolder.java/1.1.1.1/Wed Jul  6 13:02:52 2005//
-/AttributeCertificateIssuer.java/1.1.1.1/Wed Jul  6 13:02:52 2005//
-/X509AttributeCertStoreSelector.java/1.1/Tue Mar 25 06:10:28 2008//
-/X509CRLStoreSelector.java/1.1/Wed Dec 13 12:22:36 2006//
-/X509CertStoreSelector.java/1.1/Wed Dec 13 12:22:36 2006//
-/X509Util.java/1.3/Fri Mar 13 00:42:08 2009//
-/X509V1CertificateGenerator.java/1.5/Fri Mar 13 00:42:08 2009//
-/X509V2AttributeCertificateGenerator.java/1.2/Mon Aug 21 08:46:42 2006//
-/X509V2CRLGenerator.java/1.7/Fri Mar 13 00:42:08 2009//
-/X509V3CertificateGenerator.java/1.5/Fri Mar 13 00:42:08 2009//
+/AttributeCertificateHolder.java/1.1.1.1/Wed Jul  6 13:02:52 2005//D2010.11.21.06.00.00
+/AttributeCertificateIssuer.java/1.1.1.1/Wed Jul  6 13:02:52 2005//D2010.11.21.06.00.00
+/X509AttributeCertStoreSelector.java/1.1/Tue Mar 25 06:10:28 2008//D2010.11.21.06.00.00
+/X509CRLStoreSelector.java/1.1/Wed Dec 13 12:22:36 2006//D2010.11.21.06.00.00
+/X509CertStoreSelector.java/1.1/Wed Dec 13 12:22:36 2006//D2010.11.21.06.00.00
+/X509Util.java/1.3/Fri Mar 13 00:42:08 2009//D2010.11.21.06.00.00
+/X509V1CertificateGenerator.java/1.5/Fri Mar 13 00:42:08 2009//D2010.11.21.06.00.00
+/X509V2AttributeCertificateGenerator.java/1.2/Mon Aug 21 08:46:42 2006//D2010.11.21.06.00.00
+/X509V2CRLGenerator.java/1.7/Fri Mar 13 00:42:08 2009//D2010.11.21.06.00.00
+/X509V3CertificateGenerator.java/1.5/Fri Mar 13 00:42:08 2009//D2010.11.21.06.00.00
 D

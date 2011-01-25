@@ -11,7 +11,7 @@ import java.util.Hashtable;
 import java.util.Vector;
 
 import org.bouncycastle.asn1.ASN1Object;
-import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.crypto.prng.ThreadedSeedGenerator;
 import org.bouncycastle.util.Arrays;
 
@@ -66,7 +66,6 @@ public class TlsProtocolHandler
 
     private SecurityParameters securityParameters = null;
 
-    private TlsClientContextImpl tlsClientContext = null;
     private TlsClient tlsClient = null;
     private int[] offeredCipherSuites = null;
     private short[] offeredCompressionMethods = null;
@@ -101,6 +100,11 @@ public class TlsProtocolHandler
     {
         this.rs = new RecordStream(this, is, os);
         this.random = sr;
+    }
+
+    SecureRandom getRandom()
+    {
+        return random;
     }
 
     protected void processData(short protocol, byte[] buf, int offset, int len) throws IOException
@@ -509,7 +513,7 @@ public class TlsProtocolHandler
                         /*
                          * Initialize our cipher suite
                          */
-                        rs.clientCipherSpecDecided(tlsClient.createCipher());
+                        rs.clientCipherSpecDecided(tlsClient.createCipher(securityParameters));
 
                         /*
                          * Send our finished message.
@@ -544,7 +548,7 @@ public class TlsProtocolHandler
 
                     case CS_SERVER_CERTIFICATE_RECEIVED:
 
-                        this.keyExchange.processServerKeyExchange(is);
+                        this.keyExchange.processServerKeyExchange(is, securityParameters);
 
                         assertEmpty(is);
                         break;
@@ -595,13 +599,11 @@ public class TlsProtocolHandler
                         while (bis.available() > 0)
                         {
                             byte[] dnBytes = TlsUtils.readOpaque16(bis);
-                            authorityDNs.add(X500Name.getInstance(ASN1Object.fromByteArray(dnBytes)));
+                            authorityDNs.add(X509Name.getInstance(ASN1Object.fromByteArray(dnBytes)));
                         }
 
-                        CertificateRequest certificateRequest = new CertificateRequest(certificateTypes,
+                        this.tlsClient.processServerCertificateRequest(certificateTypes,
                             authorityDNs);
-
-                        this.tlsClient.processServerCertificateRequest(certificateRequest);
 
                         break;
                     }
@@ -780,7 +782,7 @@ public class TlsProtocolHandler
     // TODO Deprecate
     public void connect(CertificateVerifyer verifyer) throws IOException
     {
-        this.connect(new DefaultTlsClient(verifyer, new DefaultTlsCipherFactory()));
+        this.connect(new DefaultTlsClient(verifyer));
     }
 
 //    public void connect(CertificateVerifyer verifyer, Certificate clientCertificate,
@@ -810,19 +812,18 @@ public class TlsProtocolHandler
             throw new IllegalStateException("connect can only be called once");
         }
 
+        this.tlsClient = tlsClient;
+        this.tlsClient.init(this);
+
         /*
          * Send Client hello
          * 
          * First, generate some random data.
          */
-        this.securityParameters = new SecurityParameters();
-        this.securityParameters.clientRandom = new byte[32];
+        securityParameters = new SecurityParameters();
+        securityParameters.clientRandom = new byte[32];
         random.nextBytes(securityParameters.clientRandom);
         TlsUtils.writeGMTUnixTime(securityParameters.clientRandom, 0);
-
-        this.tlsClientContext = new TlsClientContextImpl(random, securityParameters);
-        this.tlsClient = tlsClient;
-        this.tlsClient.init(tlsClientContext);
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         TlsUtils.writeVersion(os);

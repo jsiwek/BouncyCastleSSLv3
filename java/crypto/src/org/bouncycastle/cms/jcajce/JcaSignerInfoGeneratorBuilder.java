@@ -3,7 +3,6 @@ package org.bouncycastle.cms.jcajce;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 
-import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.cms.CMSAttributeTableGenerator;
 import org.bouncycastle.cms.SignerInfoGenerator;
@@ -13,12 +12,11 @@ import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.OperatorCreationException;
 
 public class JcaSignerInfoGeneratorBuilder
+    extends SignerInfoGeneratorBuilder
 {
-    private SignerInfoGeneratorBuilder builder;
-
     public JcaSignerInfoGeneratorBuilder(DigestCalculatorProvider digestProvider)
     {
-        builder = new SignerInfoGeneratorBuilder(digestProvider);
+        super(digestProvider);
     }
 
     /**
@@ -29,40 +27,28 @@ public class JcaSignerInfoGeneratorBuilder
      */
     public JcaSignerInfoGeneratorBuilder setDirectSignature(boolean hasNoSignedAttributes)
     {
-        builder.setDirectSignature(hasNoSignedAttributes);
+        super.setDirectSignature(hasNoSignedAttributes);
 
         return this;
     }
 
     public JcaSignerInfoGeneratorBuilder setSignedAttributeGenerator(CMSAttributeTableGenerator signedGen)
     {
-        builder.setSignedAttributeGenerator(signedGen);
+        super.setSignedAttributeGenerator(signedGen);
 
         return this;
     }
 
     public JcaSignerInfoGeneratorBuilder setUnsignedAttributeGenerator(CMSAttributeTableGenerator unsignedGen)
     {
-        builder.setUnsignedAttributeGenerator(unsignedGen);
+        super.setUnsignedAttributeGenerator(unsignedGen);
 
         return this;
-    }
-
-    public SignerInfoGenerator build(ContentSigner contentSigner, X509CertificateHolder certHolder)
-        throws OperatorCreationException
-    {
-        return builder.build(contentSigner, certHolder);
-    }
-
-    public SignerInfoGenerator build(ContentSigner contentSigner, byte[] keyIdentifier)
-        throws OperatorCreationException
-    {
-        return builder.build(contentSigner, keyIdentifier);
     }
 
     public SignerInfoGenerator build(ContentSigner contentSigner, X509Certificate certificate)
         throws OperatorCreationException, CertificateEncodingException
     {
-        return this.build(contentSigner, new JcaX509CertificateHolder(certificate));
+        return super.build(contentSigner, new JcaX509CertificateHolder(certificate));
     }
 }

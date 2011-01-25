@@ -1,22 +1,22 @@
-/AuthenticatorControl.java/1.3/Tue Dec 21 00:36:22 2010//
-/CRMFException.java/1.1/Thu Jul 15 05:51:06 2010//
-/CRMFRuntimeException.java/1.1/Wed Jul 14 05:52:28 2010//
-/CRMFUtil.java/1.2/Fri Jul 23 05:12:30 2010//
-/CertificateRequestMessage.java/1.17/Fri Dec 31 03:22:50 2010//
-/CertificateRequestMessageBuilder.java/1.11/Wed Dec 22 03:44:43 2010//
-/Control.java/1.2/Tue Dec 21 00:36:22 2010//
-/EncryptedValueBuilder.java/1.5/Sun Dec 19 08:33:40 2010//
-/EncryptedValuePadder.java/1.2/Sun Dec 19 08:33:40 2010//
-/EncryptedValueParser.java/1.4/Sun Dec 19 08:33:40 2010//
-/FixedLengthMGF1Padder.java/1.3/Sun Dec 19 08:33:40 2010//
-/PKIArchiveControl.java/1.3/Tue Dec 21 00:36:22 2010//
-/PKIArchiveControlBuilder.java/1.3/Tue Dec 21 00:36:22 2010//
-/PKMACBuilder.java/1.4/Fri Dec 31 03:22:50 2010//
-/PKMACValueGenerator.java/1.2/Tue Aug 31 06:02:53 2010//
-/PKMACValueVerifier.java/1.4/Tue Dec 21 00:38:45 2010//
-/PKMACValuesCalculator.java/1.1/Thu Jul 15 05:51:06 2010//
-/ProofOfPossessionSigningKeyBuilder.java/1.4/Tue Aug 24 08:42:40 2010//
-/RegTokenControl.java/1.3/Tue Dec 21 00:36:22 2010//
-/ValueDecryptorGenerator.java/1.1/Wed Aug 25 03:48:41 2010//
-/package.html/1.1/Tue Dec 14 06:01:40 2010//
-D
+D/base////
+D/jcajce////
+/AuthenticatorControl.java/1.2/Tue Jan 25 01:58:39 2011//D2010.11.21.06.00.00
+/CRMFException.java/1.1/Thu Jul 15 05:51:06 2010//D2010.11.21.06.00.00
+/CRMFRuntimeException.java/1.1/Wed Jul 14 05:52:28 2010//D2010.11.21.06.00.00
+/CRMFUtil.java/1.2/Fri Jul 23 05:12:30 2010//D2010.11.21.06.00.00
+/CertificateRequestMessage.java/1.13/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/CertificateRequestMessageBuilder.java/1.8/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/Control.java/1.1/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/EncryptedValueBuilder.java/1.4/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/EncryptedValuePadder.java/1.1/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/EncryptedValueParser.java/1.3/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/FixedLengthMGF1Padder.java/1.2/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/PKIArchiveControl.java/1.2/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/PKIArchiveControlBuilder.java/1.2/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/PKMACBuilder.java/1.2/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/PKMACValueGenerator.java/1.2/Tue Aug 31 06:02:53 2010//D2010.11.21.06.00.00
+/PKMACValueVerifier.java/1.3/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/PKMACValuesCalculator.java/1.1/Thu Jul 15 05:51:06 2010//D2010.11.21.06.00.00
+/ProofOfPossessionSigningKeyBuilder.java/1.4/Tue Aug 24 08:42:40 2010//D2010.11.21.06.00.00
+/RegTokenControl.java/1.2/Tue Jan 25 01:58:40 2011//D2010.11.21.06.00.00
+/ValueDecryptorGenerator.java/1.1/Wed Aug 25 03:48:41 2010//D2010.11.21.06.00.00

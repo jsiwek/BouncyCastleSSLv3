@@ -5,32 +5,28 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.NoSuchProviderException;
+import java.security.cert.X509Extension;
 import java.util.Enumeration;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import org.bouncycastle.asn1.ASN1InputStream;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.cmp.PKIFailureInfo;
 import org.bouncycastle.asn1.tsp.TimeStampReq;
-import org.bouncycastle.asn1.x509.X509Extension;
 import org.bouncycastle.asn1.x509.X509Extensions;
 
 /**
  * Base class for an RFC 3161 Time Stamp Request.
  */
 public class TimeStampRequest
-    implements java.security.cert.X509Extension
+    implements X509Extension
 {
-    private TimeStampReq req;
-    private X509Extensions extensions;
+    TimeStampReq req;
 
     public TimeStampRequest(TimeStampReq req)
     {
         this.req = req;
-        this.extensions = req.getExtensions();
     }
 
     /**
@@ -214,29 +210,9 @@ public class TimeStampRequest
 
     X509Extensions getExtensions()
     {
-        return extensions;
+        return req.getExtensions();
     }
-
-    public boolean hasExtensions()
-    {
-        return extensions != null;
-    }
-
-    public X509Extension getExtension(ASN1ObjectIdentifier oid)
-    {
-        if (extensions != null)
-        {
-            return extensions.getExtension(oid);
-        }
-
-        return null;
-    }
-
-    public List getExtensionOIDs()
-    {
-        return TSPUtil.getExtensionOIDs(extensions);
-    }
-
+    
     /* (non-Javadoc)
      * @see java.security.cert.X509Extension#getExtensionValue(java.lang.String)
      */

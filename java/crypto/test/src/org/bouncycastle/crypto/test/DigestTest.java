@@ -91,6 +91,7 @@ public abstract class DigestTest
 
         if (!areEqual(resBuf, expected))
         {
+            System.out.println(new String(Hex.decode(input)));
             fail("Vector " + count + " failed got " + new String(Hex.encode(resBuf)));
         }
     }

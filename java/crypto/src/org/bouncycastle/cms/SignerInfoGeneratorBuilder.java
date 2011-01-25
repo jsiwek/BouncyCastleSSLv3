@@ -51,11 +51,7 @@ public class SignerInfoGeneratorBuilder
     {
         SignerIdentifier sigId = new SignerIdentifier(certHolder.getIssuerAndSerialNumber());
 
-        SignerInfoGenerator sigInfoGen = createGenerator(contentSigner, sigId);
-
-        sigInfoGen.setAssociatedCertificate(certHolder);
-
-        return sigInfoGen;
+        return createGenerator(contentSigner, sigId);
     }
 
     public SignerInfoGenerator build(ContentSigner contentSigner, byte[] keyIdentifier)

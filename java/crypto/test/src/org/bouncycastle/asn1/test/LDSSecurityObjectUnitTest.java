@@ -10,7 +10,6 @@ import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.icao.DataGroupHash;
 import org.bouncycastle.asn1.icao.LDSSecurityObject;
-import org.bouncycastle.asn1.icao.LDSVersionInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.util.test.SimpleTest;
 
@@ -47,22 +46,13 @@ public class LDSSecurityObjectUnitTest
         LDSSecurityObject so = new LDSSecurityObject(algoId, datas);
 
         checkConstruction(so, algoId, datas);
-
-        LDSVersionInfo versionInfo = new LDSVersionInfo("Hello", "world");
-
-        so = new LDSSecurityObject(algoId, datas, versionInfo);
-
-        checkConstruction(so, algoId, datas, versionInfo);
-
-        try
+        
+        
+        so = LDSSecurityObject.getInstance(null);
+        
+        if (so != null)
         {
-            LDSSecurityObject.getInstance(null);
-
-            fail("getInstance() failed to detect null.");
-        }
-        catch (IllegalArgumentException e)
-        {
-            // expected
+            fail("null getInstance() failed.");
         }
         
         try
@@ -80,7 +70,7 @@ public class LDSSecurityObjectUnitTest
         {
             ASN1EncodableVector v = new ASN1EncodableVector();
             
-            LDSSecurityObject.getInstance(new DERSequence(v));
+            new LDSSecurityObject(new DERSequence(v));
             
             fail("constructor failed to detect empty sequence.");
         }
@@ -118,11 +108,11 @@ public class LDSSecurityObjectUnitTest
         DataGroupHash[]       datagroupHash) 
         throws IOException
     {
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, null);
+        checkStatement(so, digestAlgorithmIdentifier, datagroupHash);
         
         so = LDSSecurityObject.getInstance(so);
         
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, null);
+        checkStatement(so, digestAlgorithmIdentifier, datagroupHash);
         
         ASN1InputStream aIn = new ASN1InputStream(so.toASN1Object().getEncoded());
 
@@ -130,41 +120,13 @@ public class LDSSecurityObjectUnitTest
         
         so = LDSSecurityObject.getInstance(seq);
         
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, null);
-    }
-
-    private void checkConstruction(
-        LDSSecurityObject   so,
-        AlgorithmIdentifier digestAlgorithmIdentifier,
-        DataGroupHash[]     datagroupHash,
-        LDSVersionInfo      versionInfo)
-        throws IOException
-    {
-        if (so.getVersion() != 1)
-        {
-            fail("version number not 1");
-        }
-
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, versionInfo);
-
-        so = LDSSecurityObject.getInstance(so);
-
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, versionInfo);
-
-        ASN1InputStream aIn = new ASN1InputStream(so.toASN1Object().getEncoded());
-
-        ASN1Sequence seq = (ASN1Sequence)aIn.readObject();
-
-        so = LDSSecurityObject.getInstance(seq);
-
-        checkStatement(so, digestAlgorithmIdentifier, datagroupHash, versionInfo);
+        checkStatement(so, digestAlgorithmIdentifier, datagroupHash);
     }
 
     private void checkStatement(
-        LDSSecurityObject   so,
+        LDSSecurityObject so,
         AlgorithmIdentifier digestAlgorithmIdentifier, 
-        DataGroupHash[]     datagroupHash,
-        LDSVersionInfo      versionInfo)
+        DataGroupHash[]       datagroupHash)
     {
         if (digestAlgorithmIdentifier != null)
         {
@@ -194,20 +156,8 @@ public class LDSSecurityObjectUnitTest
         {
             fail("data hash groups found when none expected.");
         }
-
-        if (versionInfo != null)
-        {
-            if (!versionInfo.equals(so.getVersionInfo()))
-            {
-                fail("versionInfo doesn't match");
-            }
-        }
-        else if (so.getVersionInfo() != null)
-        {
-            fail("version info found when none expected.");
-        }
     }
-
+    
     public static void main(
         String[]    args)
     {

@@ -1,16 +1,15 @@
 package org.bouncycastle.ocsp;
 
-import java.security.MessageDigest;
-import java.security.PublicKey;
-
-import org.bouncycastle.jce.X509Principal;
-
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.ocsp.ResponderID;
-import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.jce.X509Principal;
+
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.PublicKey;
 
 /**
  * Carrier for a ResponderID.
@@ -28,7 +27,14 @@ public class RespID
     public RespID(
         X509Principal   name)
     {
-        this.id = new ResponderID(X500Name.getInstance(name.getEncoded()));
+        try
+        {
+            this.id = new ResponderID(new X509Principal(name.getEncoded()));
+        }
+        catch (IOException e)
+        {
+            throw new IllegalArgumentException("can't decode name.");
+        }
     }
 
     public RespID(
@@ -37,8 +43,7 @@ public class RespID
     {
         try
         {
-            // TODO Allow specification of a particular provider
-            MessageDigest digest = OCSPUtil.createDigestInstance("SHA1", null);
+            MessageDigest       digest = MessageDigest.getInstance("SHA1");
 
             ASN1InputStream aIn = new ASN1InputStream(key.getEncoded());
             SubjectPublicKeyInfo info = SubjectPublicKeyInfo.getInstance(aIn.readObject());

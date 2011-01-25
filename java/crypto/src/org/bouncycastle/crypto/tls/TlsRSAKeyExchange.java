@@ -23,7 +23,7 @@ import org.bouncycastle.crypto.util.PublicKeyFactory;
  */
 class TlsRSAKeyExchange implements TlsKeyExchange
 {
-    protected TlsClientContext context;
+    protected TlsProtocolHandler handler;
     protected CertificateVerifyer verifyer;
 
     protected AsymmetricKeyParameter serverPublicKey = null;
@@ -32,9 +32,9 @@ class TlsRSAKeyExchange implements TlsKeyExchange
 
     protected byte[] premasterSecret;
 
-    TlsRSAKeyExchange(TlsClientContext context, CertificateVerifyer verifyer)
+    TlsRSAKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer)
     {
-        this.context = context;
+        this.handler = handler;
         this.verifyer = verifyer;
     }
 
@@ -94,7 +94,7 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         // OK
     }
 
-    public void processServerKeyExchange(InputStream is)
+    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
         throws IOException
     {
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
@@ -106,11 +106,11 @@ class TlsRSAKeyExchange implements TlsKeyExchange
          * Choose a PremasterSecret and send it encrypted to the server
          */
         premasterSecret = new byte[48];
-        context.getSecureRandom().nextBytes(premasterSecret);
+        handler.getRandom().nextBytes(premasterSecret);
         TlsUtils.writeVersion(premasterSecret, 0);
 
         PKCS1Encoding encoding = new PKCS1Encoding(new RSABlindedEngine());
-        encoding.init(true, new ParametersWithRandom(this.rsaServerPublicKey, context.getSecureRandom()));
+        encoding.init(true, new ParametersWithRandom(this.rsaServerPublicKey, handler.getRandom()));
 
         try
         {
@@ -139,7 +139,7 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         X509Extensions exts = c.getTBSCertificate().getExtensions();
         if (exts != null)
         {
-            X509Extension ext = exts.getExtension(X509Extension.keyUsage);
+            X509Extension ext = exts.getExtension(X509Extensions.KeyUsage);
             if (ext != null)
             {
                 DERBitString ku = KeyUsage.getInstance(ext);

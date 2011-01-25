@@ -8,14 +8,13 @@ import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DERInteger;
 import org.bouncycastle.asn1.DERObject;
 import org.bouncycastle.asn1.DERSequence;
-import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.X509Name;
 
 public class IssuerAndSerialNumber
     extends ASN1Encodable
 {
-    private X500Name    name;
-    private DERInteger  serialNumber;
+    X509Name    name;
+    DERInteger  serialNumber;
 
     public static IssuerAndSerialNumber getInstance(
         Object  obj)
@@ -36,41 +35,27 @@ public class IssuerAndSerialNumber
     public IssuerAndSerialNumber(
         ASN1Sequence    seq)
     {
-        this.name = X500Name.getInstance(seq.getObjectAt(0));
+        this.name = X509Name.getInstance(seq.getObjectAt(0));
         this.serialNumber = (DERInteger)seq.getObjectAt(1);
     }
 
     public IssuerAndSerialNumber(
-        X500Name name,
+        X509Name    name,
         BigInteger  serialNumber)
     {
         this.name = name;
         this.serialNumber = new DERInteger(serialNumber);
     }
 
-    /**
-     * @deprecated use X500Name constructor
-     */
-    public IssuerAndSerialNumber(
-        X509Name    name,
-        BigInteger  serialNumber)
-    {
-        this.name = X500Name.getInstance(name);
-        this.serialNumber = new DERInteger(serialNumber);
-    }
-
-    /**
-     * @deprecated use X500Name constructor
-     */
     public IssuerAndSerialNumber(
         X509Name    name,
         DERInteger  serialNumber)
     {
-        this.name = X500Name.getInstance(name);
+        this.name = name;
         this.serialNumber = serialNumber;
     }
 
-    public X500Name getName()
+    public X509Name getName()
     {
         return name;
     }

@@ -15,9 +15,10 @@ import org.bouncycastle.math.ec.ECPoint;
  */
 class TlsECDHEKeyExchange extends TlsECKeyExchange
 {
-    TlsECDHEKeyExchange(TlsClientContext context, CertificateVerifyer verifyer, int keyExchange)
+    TlsECDHEKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer,
+        short keyExchange)
     {
-        super(context, verifyer, keyExchange);
+        super(handler, verifyer, keyExchange);
     }
 
     public void skipServerCertificate() throws IOException
@@ -30,11 +31,9 @@ class TlsECDHEKeyExchange extends TlsECKeyExchange
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
     }
 
-    public void processServerKeyExchange(InputStream is)
+    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
         throws IOException
     {
-        SecurityParameters securityParameters = context.getSecurityParameters();
-
         Signer signer = initSigner(tlsSigner, securityParameters);
         InputStream sigIn = new SignerInputStream(is, signer);
 

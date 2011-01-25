@@ -1,7 +1,5 @@
 package org.bouncycastle.crypto.signers;
 
-import java.security.SecureRandom;
-
 import org.bouncycastle.crypto.AsymmetricBlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.CryptoException;
@@ -11,6 +9,8 @@ import org.bouncycastle.crypto.Signer;
 import org.bouncycastle.crypto.params.ParametersWithRandom;
 import org.bouncycastle.crypto.params.RSABlindingParameters;
 import org.bouncycastle.crypto.params.RSAKeyParameters;
+
+import java.security.SecureRandom;
 
 /**
  * RSA-PSS as described in PKCS# 1 v 2.1.
@@ -29,7 +29,6 @@ public class PSSSigner
     private SecureRandom                random;
 
     private int                         hLen;
-    private int                         mgfhLen;
     private int                         sLen;
     private int                         emBits;
     private byte[]                      salt;
@@ -51,16 +50,7 @@ public class PSSSigner
     {
         this(cipher, digest, sLen, TRAILER_IMPLICIT);
     }
-
-    public PSSSigner(
-        AsymmetricBlockCipher   cipher,
-        Digest                  contentDigest,
-        Digest                  mgfDigest,
-        int                     sLen)
-    {
-        this(cipher, contentDigest, mgfDigest, sLen, TRAILER_IMPLICIT);
-    }
-
+    
     public PSSSigner(
             AsymmetricBlockCipher   cipher,
             Digest                  digest,
@@ -80,8 +70,7 @@ public class PSSSigner
         this.cipher = cipher;
         this.contentDigest = contentDigest;
         this.mgfDigest = mgfDigest;
-        this.hLen = contentDigest.getDigestSize();
-        this.mgfhLen = mgfDigest.getDigestSize();
+        this.hLen = mgfDigest.getDigestSize();
         this.sLen = sLen;
         this.salt = new byte[sLen];
         this.mDash = new byte[8 + sLen + hLen];
@@ -193,9 +182,9 @@ public class PSSSigner
 
         byte[]  h = new byte[hLen];
 
-        contentDigest.update(mDash, 0, mDash.length);
+        mgfDigest.update(mDash, 0, mDash.length);
 
-        contentDigest.doFinal(h, 0);
+        mgfDigest.doFinal(h, 0);
 
         block[block.length - sLen - 1 - hLen - 1] = 0x01;
         System.arraycopy(salt, 0, block, block.length - sLen - hLen - 1, sLen);
@@ -270,8 +259,8 @@ public class PSSSigner
 
         System.arraycopy(block, block.length - sLen - hLen - 1, mDash, mDash.length - sLen, sLen);
 
-        contentDigest.update(mDash, 0, mDash.length);
-        contentDigest.doFinal(mDash, mDash.length - hLen);
+        mgfDigest.update(mDash, 0, mDash.length);
+        mgfDigest.doFinal(mDash, mDash.length - hLen);
 
         for (int i = block.length - hLen - 1, j = mDash.length - hLen;
                                                  j != mDash.length; i++, j++)
@@ -313,13 +302,13 @@ public class PSSSigner
         int     length)
     {
         byte[]  mask = new byte[length];
-        byte[]  hashBuf = new byte[mgfhLen];
+        byte[]  hashBuf = new byte[hLen];
         byte[]  C = new byte[4];
         int     counter = 0;
 
         mgfDigest.reset();
 
-        while (counter < (length / mgfhLen))
+        while (counter < (length / hLen))
         {
             ItoOSP(counter, C);
 
@@ -327,12 +316,12 @@ public class PSSSigner
             mgfDigest.update(C, 0, C.length);
             mgfDigest.doFinal(hashBuf, 0);
 
-            System.arraycopy(hashBuf, 0, mask, counter * mgfhLen, mgfhLen);
-
+            System.arraycopy(hashBuf, 0, mask, counter * hLen, hLen);
+            
             counter++;
         }
 
-        if ((counter * mgfhLen) < length)
+        if ((counter * hLen) < length)
         {
             ItoOSP(counter, C);
 
@@ -340,7 +329,7 @@ public class PSSSigner
             mgfDigest.update(C, 0, C.length);
             mgfDigest.doFinal(hashBuf, 0);
 
-            System.arraycopy(hashBuf, 0, mask, counter * mgfhLen, mask.length - (counter * mgfhLen));
+            System.arraycopy(hashBuf, 0, mask, counter * hLen, mask.length - (counter * hLen));
         }
 
         return mask;

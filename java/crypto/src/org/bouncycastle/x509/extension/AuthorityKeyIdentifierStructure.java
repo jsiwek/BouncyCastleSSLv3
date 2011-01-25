@@ -13,7 +13,6 @@ import org.bouncycastle.asn1.x509.AuthorityKeyIdentifier;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.GeneralNames;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.asn1.x509.X509Extension;
 import org.bouncycastle.asn1.x509.X509Extensions;
 import org.bouncycastle.jce.PrincipalUtil;
 
@@ -35,18 +34,7 @@ public class AuthorityKeyIdentifierStructure
     {
         super((ASN1Sequence)X509ExtensionUtil.fromExtensionValue(encodedValue));
     }
-
-    /**
-     * Constructor which will take an extension
-     *
-     * @param extension a X509Extension object containing an AuthorityKeyIdentifier.
-     */
-    public AuthorityKeyIdentifierStructure(
-        X509Extension extension)
-    {
-        super((ASN1Sequence)extension.getParsedValue());
-    }
-
+    
     private static ASN1Sequence fromCertificate(
         X509Certificate certificate)
         throws CertificateParsingException

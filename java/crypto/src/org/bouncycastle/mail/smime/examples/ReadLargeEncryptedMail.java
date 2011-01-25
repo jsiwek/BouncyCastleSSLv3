@@ -11,7 +11,6 @@ import javax.mail.internet.MimeMessage;
 import org.bouncycastle.cms.RecipientId;
 import org.bouncycastle.cms.RecipientInformation;
 import org.bouncycastle.cms.RecipientInformationStore;
-import org.bouncycastle.cms.jcajce.JceKeyTransRecipientId;
 import org.bouncycastle.mail.smime.SMIMEEnvelopedParser;
 import org.bouncycastle.mail.smime.SMIMEUtil;
 import org.bouncycastle.mail.smime.util.SharedFileInputStream;
@@ -46,7 +45,10 @@ public class ReadLargeEncryptedMail
         // suitable recipient identifier.
         //
         X509Certificate cert = (X509Certificate)ks.getCertificate(keyAlias);
-        RecipientId     recId = new JceKeyTransRecipientId(cert.getIssuerX500Principal(), cert.getSerialNumber());        
+        RecipientId     recId = new RecipientId();
+
+        recId.setSerialNumber(cert.getSerialNumber());
+        recId.setIssuer(cert.getIssuerX500Principal().getEncoded());
 
         //
         // Get a Session object with the default properties.

@@ -15,7 +15,7 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
 public abstract class RecipientInformation
 {
-    protected RecipientId rid;
+    protected RecipientId rid = new RecipientId();
     protected AlgorithmIdentifier   keyEncAlg;
     protected CMSSecureReadable     secureReadable;
     protected RecipientOperator     operator;
@@ -150,9 +150,6 @@ public abstract class RecipientInformation
         }
     }
 
-    /**
-     * @deprecated use getContent(Recipient)
-     */
     public byte[] getContent(
         Key key,
         String provider)
@@ -161,9 +158,6 @@ public abstract class RecipientInformation
         return getContent(key, CMSUtils.getProvider(provider));
     }
 
-    /**
-     * @deprecated use getContent(Recipient)
-     */
     public byte[] getContent(
         Key key,
         Provider provider)
@@ -178,6 +172,21 @@ public abstract class RecipientInformation
             throw new RuntimeException("unable to parse internal stream: " + e);
         }
     }
+
+    public byte[] getContent(
+        Recipient recipient)
+        throws CMSException
+    {
+        try
+        {
+            return CMSUtils.streamToByteArray(getContentStream(recipient).getContentStream());
+        }
+        catch (IOException e)
+        {
+            throw new RuntimeException("unable to parse internal stream: " + e);
+        }
+    }
+
 
     /**
      * Return the MAC calculated for the content stream. Note: this call is only meaningful once all
@@ -210,28 +219,6 @@ public abstract class RecipientInformation
     }
 
     /**
-     * Return the decrypted/encapsulated content in the EnvelopedData after recovering the content
-     * encryption/MAC key using the passed in Recipient.
-     *
-     * @param recipient recipient object to use to recover content encryption key
-     * @return  the content inside the EnvelopedData this RecipientInformation is associated with.
-     * @throws CMSException if the content-encryption/MAC key cannot be recovered.
-     */
-    public byte[] getContent(
-        Recipient recipient)
-        throws CMSException
-    {
-        try
-        {
-            return CMSUtils.streamToByteArray(getContentStream(recipient).getContentStream());
-        }
-        catch (IOException e)
-        {
-            throw new CMSException("unable to parse internal stream: " + e.getMessage(), e);
-        }
-    }
-
-    /**
      * decrypt the content and return it
      * @deprecated use getContentStream(Recipient) method
      */
@@ -249,14 +236,6 @@ public abstract class RecipientInformation
         throws CMSException;
 
 
-    /**
-     * Return a CMSTypedStream representing the content in the EnvelopedData after recovering the content
-     * encryption/MAC key using the passed in Recipient.
-     *
-     * @param recipient recipient object to use to recover content encryption key
-     * @return  the content inside the EnvelopedData this RecipientInformation is associated with.
-     * @throws CMSException if the content-encryption/MAC key cannot be recovered.
-     */
     public abstract CMSTypedStream getContentStream(Recipient recipient)
         throws CMSException, IOException;
 }

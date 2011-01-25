@@ -1,18 +1,1 @@
-/BasicOCSPResp.java/1.1/Tue Nov 30 05:22:29 2010//
-/BasicOCSPRespBuilder.java/1.1/Tue Nov 30 05:22:29 2010//
-/CertificateID.java/1.1/Tue Nov 30 05:22:29 2010//
-/CertificateStatus.java/1.1/Tue Nov 30 05:22:29 2010//
-/OCSPException.java/1.1/Tue Nov 30 05:22:30 2010//
-/OCSPReq.java/1.1/Tue Nov 30 05:22:30 2010//
-/OCSPReqBuilder.java/1.1/Tue Nov 30 05:22:29 2010//
-/OCSPResp.java/1.1/Tue Nov 30 05:22:29 2010//
-/OCSPRespBuilder.java/1.1/Tue Nov 30 05:22:29 2010//
-/OCSPUtils.java/1.1/Tue Nov 30 05:22:29 2010//
-/Req.java/1.1/Tue Nov 30 05:22:29 2010//
-/RespData.java/1.1/Tue Nov 30 05:22:30 2010//
-/RespID.java/1.1/Tue Nov 30 05:22:29 2010//
-/RevokedStatus.java/1.1/Tue Nov 30 05:22:30 2010//
-/SingleResp.java/1.1/Tue Nov 30 05:22:29 2010//
-/UnknownStatus.java/1.1/Tue Nov 30 05:22:29 2010//
-/package.html/1.1/Tue Dec 14 06:01:40 2010//
-D
+D/jcajce////

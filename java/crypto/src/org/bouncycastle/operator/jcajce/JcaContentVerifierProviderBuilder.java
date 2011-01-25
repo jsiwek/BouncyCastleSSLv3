@@ -7,18 +7,18 @@ import java.security.Provider;
 import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
-import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.util.Date;
 
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.cert.X509CertificateHolder;
-import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
 import org.bouncycastle.jcajce.DefaultJcaJceHelper;
 import org.bouncycastle.jcajce.NamedJcaJceHelper;
 import org.bouncycastle.jcajce.ProviderJcaJceHelper;
 import org.bouncycastle.operator.ContentVerifier;
 import org.bouncycastle.operator.ContentVerifierProvider;
+import org.bouncycastle.operator.DatedContentVerifier;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.OperatorStreamException;
 import org.bouncycastle.operator.RawContentVerifier;
@@ -55,30 +55,9 @@ public class JcaContentVerifierProviderBuilder
     public ContentVerifierProvider build(final X509Certificate certificate)
         throws OperatorCreationException
     {
-        final X509CertificateHolder certHolder;
-
-        try
-        {
-            certHolder = new JcaX509CertificateHolder(certificate);
-        }
-        catch (CertificateEncodingException e)
-        {
-            throw new OperatorCreationException("cannot process certificate: " + e.getMessage(), e);
-        }
-
         return new ContentVerifierProvider()
         {
             private SignatureOutputStream stream;
-
-            public boolean hasAssociatedCertificate()
-            {
-                return true;
-            }
-
-            public X509CertificateHolder getAssociatedCertificate()
-            {
-                return certHolder;
-            }
 
             public ContentVerifier get(AlgorithmIdentifier algorithm)
                 throws OperatorCreationException
@@ -100,11 +79,11 @@ public class JcaContentVerifierProviderBuilder
 
                 if (rawSig != null)
                 {
-                    return new RawSigVerifier(stream, rawSig);
+                    return new DatedRawSigVerifier(stream, certificate, rawSig);
                 }
                 else
                 {
-                    return new SigVerifier(stream);
+                    return new DatedSigVerifier(stream, certificate);
                 }
             }
         };
@@ -115,16 +94,6 @@ public class JcaContentVerifierProviderBuilder
     {
         return new ContentVerifierProvider()
         {
-            public boolean hasAssociatedCertificate()
-            {
-                return false;
-            }
-
-            public X509CertificateHolder getAssociatedCertificate()
-            {
-                return null;
-            }
-
             public ContentVerifier get(AlgorithmIdentifier algorithm)
                 throws OperatorCreationException
             {
@@ -210,6 +179,34 @@ public class JcaContentVerifierProviderBuilder
         }
     }
 
+    private class DatedSigVerifier
+        extends SigVerifier
+        implements DatedContentVerifier
+    {
+        private X509Certificate certificate;
+
+        DatedSigVerifier(SignatureOutputStream stream, X509Certificate certificate)
+        {
+            super(stream);
+            this.certificate = certificate;
+        }
+
+        public Date getNotBefore()
+        {
+            return certificate.getNotBefore();
+        }
+
+        public Date getNotAfter()
+        {
+            return certificate.getNotAfter();
+        }
+
+        public boolean isValid(Date date)
+        {
+            return !date.before(getNotBefore()) && !date.after(getNotAfter());
+        }
+    }
+
     private class RawSigVerifier
         extends SigVerifier
         implements RawContentVerifier
@@ -234,6 +231,34 @@ public class JcaContentVerifierProviderBuilder
             {
                 throw new RuntimeOperatorException("exception obtaining raw signature: " + e.getMessage(), e);
             }
+        }
+    }
+
+    private class DatedRawSigVerifier
+        extends RawSigVerifier
+        implements DatedContentVerifier
+    {
+        private X509Certificate certificate;
+
+        DatedRawSigVerifier(SignatureOutputStream stream, X509Certificate certificate, Signature rawSignature)
+        {
+            super(stream, rawSignature);
+            this.certificate = certificate;
+        }
+
+        public Date getNotBefore()
+        {
+            return certificate.getNotBefore();
+        }
+
+        public Date getNotAfter()
+        {
+            return certificate.getNotAfter();
+        }
+
+        public boolean isValid(Date date)
+        {
+            return !date.before(getNotBefore()) && !date.after(getNotAfter());
         }
     }
 

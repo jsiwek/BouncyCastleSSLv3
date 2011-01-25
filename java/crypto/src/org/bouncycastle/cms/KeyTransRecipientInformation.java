@@ -40,20 +40,29 @@ public class KeyTransRecipientInformation
         super(info.getKeyEncryptionAlgorithm(), secureReadable);
 
         this.info = info;
+        this.rid = new RecipientId();
 
         RecipientIdentifier r = info.getRecipientIdentifier();
 
-        if (r.isTagged())
+        try
         {
-            ASN1OctetString octs = ASN1OctetString.getInstance(r.getId());
+            if (r.isTagged())
+            {
+                ASN1OctetString octs = ASN1OctetString.getInstance(r.getId());
 
-            rid = new KeyTransRecipientId(octs.getOctets());
+                rid.setSubjectKeyIdentifier(octs.getOctets());
+            }
+            else
+            {
+                IssuerAndSerialNumber   iAnds = IssuerAndSerialNumber.getInstance(r.getId());
+
+                rid.setIssuer(iAnds.getName().getEncoded());
+                rid.setSerialNumber(iAnds.getSerialNumber().getValue());
+            }
         }
-        else
+        catch (IOException e)
         {
-            IssuerAndSerialNumber   iAnds = IssuerAndSerialNumber.getInstance(r.getId());
-
-            rid = new KeyTransRecipientId(iAnds.getName(), iAnds.getSerialNumber().getValue());
+            throw new IllegalArgumentException("invalid rid in KeyTransRecipientInformation");
         }
     }
 
@@ -68,9 +77,6 @@ public class KeyTransRecipientInformation
         return oid.getId();
     }
 
-    /**
-     * @deprecated
-     */
     protected Key getSessionKey(Key receiverPrivateKey, Provider prov)
         throws CMSException
     {
