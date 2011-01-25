@@ -11,7 +11,7 @@ import java.net.Socket;
  */
 public class BCTLSConnection {
     public static void main(String[] args) throws Exception {
-        ServerThread st = new ServerThread(
+        JSSEServerThread st = new JSSEServerThread(
                 new SSLConnectionServer(false), 9999);
         st.start();
         Thread.yield();

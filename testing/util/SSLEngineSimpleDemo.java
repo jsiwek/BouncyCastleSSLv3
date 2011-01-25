@@ -121,9 +121,9 @@ public class SSLEngineSimpleDemo {
     /*
      * The following is to set up the keystores.
      */
-    private static String keyStoreFile = "testkeys";
-    private static String trustStoreFile = "testkeys";
-    private static String passwd = "passphrase";
+    private static String keyStoreFile = "keystore.ImportKey";
+    private static String trustStoreFile = "keystore.ImportKey";
+    private static String passwd = "importkey";
 
     /*
      * Main entry point for this demo.
@@ -147,7 +147,7 @@ public class SSLEngineSimpleDemo {
         KeyStore ks = KeyStore.getInstance("JKS");
         KeyStore ts = KeyStore.getInstance("JKS");
 
-        char[] passphrase = "passphrase".toCharArray();
+        char[] passphrase = "importkey".toCharArray();
 
         ks.load(new FileInputStream(keyStoreFile), passphrase);
         ts.load(new FileInputStream(trustStoreFile), passphrase);

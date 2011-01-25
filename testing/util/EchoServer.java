@@ -9,8 +9,8 @@ import java.security.KeyStore;
  * A typical SSL echo server as implemented by JSSE
  */
 public class EchoServer {
-    private static final String KEYSTORE_FILE = "testkeys";
-    private static final char[] KEYSTORE_PASS = "passphrase".toCharArray();
+    private static final String KEYSTORE_FILE = "keystore.ImportKey";
+    private static final char[] KEYSTORE_PASS = "importkey".toCharArray();
     private static final String KEYSTORE_TYPE = "JKS";
     private static final String TRUSTMGR_TYPE = "SunX509";
 

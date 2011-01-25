@@ -1,0 +1,38 @@
+This directory contains various code to test different combinations of
+SSL implementations (e.g. OpenSSL, JSSE, Bouncy Castle) under various
+configurations against each other.
+
+Testing against OpenSSL requires that it be installed as the server is
+provided by s_server.
+
+The 'helloworld' file is meant to be read by the OpenSSL s_server in -WWW
+mode because that's an easy way to get it to send messages to clients as
+a response.
+
+The PEM encoded key pair and Java KeyStore (used for both server & client
+authentication), were created as follows:
+
+# Generate a private key
+openssl genrsa -des3 -out server.key 1024
+<enter any passphrase>
+
+# Strip passphrase
+openssl rsa -in server.key.org -out server.key
+<re-enter passphrase>
+
+# Generate a self-signed certificate
+openssl req -new -key server.key -out server.crt -x509 -days 3600 -subj "/C=US/ST=IL/O=NCSA/OU=CSD/CN=Jon Siwek"
+
+# Combine the key pair into a single file
+cat server.crt server.key > server.pem
+
+# Import the keys into a Java keystore, 'keystore.ImportKey'
+openssl pkcs8 -topk8 -nocrypt -in server.key -inform PEM -outform DER -out key.der
+openssl x509 -in server.crt -inform PEM -outform DER -out cert.der
+
+javac util/ImportKey.java
+java -cp util/ ImportKey key.der cert.der
+mv $HOME/keystore.ImportKey .
+
+# Clean up temporary files
+rm key.der cert.der util/ImportKey.class

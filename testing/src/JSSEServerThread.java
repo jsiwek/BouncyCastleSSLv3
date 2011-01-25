@@ -2,7 +2,7 @@
  * A type of thread that runs an SSL server, currently implemented by JSSE's
  * SSLEngine, that listens on a given port
  */
-public class ServerThread extends Thread {
+public class JSSEServerThread extends Thread {
     private SSLConnectionServer server;
     private int port;
 
@@ -11,7 +11,7 @@ public class ServerThread extends Thread {
      * @param s an SSL server object
      * @param p the desired port to listen on
      */
-    public ServerThread(SSLConnectionServer s, int p) {
+    public JSSEServerThread(SSLConnectionServer s, int p) {
         this.server = s;
         this.port = p;
     }

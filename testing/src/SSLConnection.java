@@ -25,8 +25,8 @@ public abstract class SSLConnection {
     protected static final int DEFAULT_PORT = 9999;
     protected static final String[] DEFAULT_PROTOCOLS = {"TLSv1", "SSLv3"};
 
-    private static final String KEYSTORE_FILE = "testkeys";
-    private static final char[] KEYSTORE_PASS = "passphrase".toCharArray();
+    private static final String KEYSTORE_FILE = "keystore.ImportKey";
+    private static final char[] KEYSTORE_PASS = "importkey".toCharArray();
     private static final String KEYSTORE_TYPE = "JKS";
     private static final String TRUSTMGR_TYPE = "SunX509";
 
