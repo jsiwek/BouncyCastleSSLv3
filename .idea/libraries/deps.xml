@@ -1,0 +1,10 @@
+<component name="libraryTable">
+  <library name="deps">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/deps/junit-4.8.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/deps/mailapi.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
