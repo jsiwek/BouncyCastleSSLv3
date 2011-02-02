@@ -4,6 +4,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.DigestException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.MD5Digest;
@@ -199,26 +203,6 @@ public class TlsUtils
         return value;
     }
 
-    protected static void checkVersion(byte[] readVersion, TlsProtocolHandler handler)
-        throws IOException
-    {
-        if ((readVersion[0] != 3) || (readVersion[1] != 1))
-        {
-            throw new TlsFatalAlert(AlertDescription.protocol_version);
-        }
-    }
-
-    protected static void checkVersion(InputStream is, TlsProtocolHandler handler)
-        throws IOException
-    {
-        int i1 = is.read();
-        int i2 = is.read();
-        if ((i1 != 3) || (i2 != 1))
-        {
-            throw new TlsFatalAlert(AlertDescription.protocol_version);
-        }
-    }
-
     protected static void writeGMTUnixTime(byte[] buf, int offset)
     {
         int t = (int)(System.currentTimeMillis() / 1000L);
@@ -226,18 +210,6 @@ public class TlsUtils
         buf[offset + 1] = (byte)(t >> 16);
         buf[offset + 2] = (byte)(t >> 8);
         buf[offset + 3] = (byte)t;
-    }
-
-    protected static void writeVersion(OutputStream os) throws IOException
-    {
-        os.write(3);
-        os.write(1);
-    }
-
-    protected static void writeVersion(byte[] buf, int offset) throws IOException
-    {
-        buf[offset] = 3;
-        buf[offset + 1] = 1;
     }
 
     private static void hmac_hash(Digest digest, byte[] secret, byte[] seed, byte[] out)
@@ -292,5 +264,175 @@ public class TlsUtils
         System.arraycopy(a, 0, c, 0, a.length);
         System.arraycopy(b, 0, c, a.length, b.length);
         return c;
+    }
+
+    // TODO: clean up and refactor SSLv3 versus TLsv1 utility functions below
+
+    protected static void updateDigest(MessageDigest md, byte[] hs_msgs,
+                      byte[] sender, byte[] secret, byte[] pad1, byte[] pad2) {
+        md.update(hs_msgs);
+        if (sender != null) md.update(sender);
+        md.update(secret);
+        md.update(pad1);
+
+        byte[] tmp = md.digest();
+
+        md.update(secret);
+        md.update(pad2);
+        md.update(tmp);
+    }
+
+    // byte[] sender only sent for finish message
+    protected static byte[] getSSLHandshakeHash(byte[] sender, byte[] secret,
+                                                byte[] handshake_messages)
+            throws DigestException, NoSuchAlgorithmException {
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
+        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+
+        updateDigest(md5, handshake_messages, sender, secret, MD5_pad1, MD5_pad2);
+        updateDigest(sha1, handshake_messages, sender, secret, SHA_pad1, SHA_pad2);
+
+        byte[] rval = new byte[36];
+
+        md5.digest(rval, 0, 16);
+        sha1.digest(rval, 16, 20);
+        return rval;
+    }
+
+    protected static byte[] getCertVerify(boolean sslv3, byte[] secret,
+                                          byte[] handshake_messages)
+            throws IOException {
+        if (sslv3) {
+            try {
+                return getSSLHandshakeHash(null, secret, handshake_messages);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new IOException(e);
+            }
+        } else {
+            CombinedHash hash = new CombinedHash();
+            hash.update(handshake_messages, 0, handshake_messages.length);
+            byte[] bs = new byte[hash.getDigestSize()];
+            hash.doFinal(bs, 0);
+            return bs;
+        }
+    }
+
+    protected static byte[] getFinishedMsg(boolean sslv3, byte[] secret,
+                                        byte[] handshake_messages, String msg,
+                                        byte[] sender)
+            throws IOException {
+        byte[] verifyData;
+        if (sslv3) {
+            try {
+                verifyData = getSSLHandshakeHash(sender,
+                        secret, handshake_messages);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new IOException(e);
+            }
+        } else {
+            CombinedHash hash = new CombinedHash();
+            hash.update(handshake_messages, 0, handshake_messages.length);
+            byte[] bs = new byte[hash.getDigestSize()];
+            hash.doFinal(bs, 0);
+
+            verifyData = PRF(secret, msg, bs, 12);
+        }
+
+        return verifyData;
+    }
+
+    protected static byte[] calculateMasterSecret(boolean sslv3,
+                                                  byte[] pre_master_secret,
+                                                  byte[] client_random,
+                                                  byte[] server_random)
+            throws IOException {
+        if (sslv3) {
+            try {
+                MessageDigest md5 = MessageDigest.getInstance("MD5");
+                MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+
+                byte rval[] = new byte[0];
+
+                for (int i = 0; i < 3; ++i) {
+                    rval = concat(rval,
+                        md5.digest(concat(pre_master_secret,
+                        sha1.digest(concat(SSL3_CONST[i],
+                                    concat(pre_master_secret,
+                                    concat(client_random, server_random)))))));
+                }
+
+                return rval;
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+        } else {
+            return PRF(pre_master_secret, "master secret",
+                    concat(client_random, server_random), 48);
+        }
+    }
+
+    protected static byte[] calculateKeyBlock(boolean sslv3, int prfSize,
+                                               byte[] master_secret,
+                                               byte[] client_random,
+                                               byte[] server_random) {
+        if (sslv3) {
+            try {
+                int i = 0;
+                byte tmp[] = new byte[0];
+
+                MessageDigest md5 = MessageDigest.getInstance("MD5");
+                MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+
+                while (tmp.length < prfSize) {
+                    tmp = concat(tmp,
+                        md5.digest(concat(master_secret,
+                        sha1.digest(concat(SSL3_CONST[i],
+                                    concat(master_secret,
+                                    concat(server_random, client_random)))))));
+                    ++i;
+                }
+
+                byte rval[] = new byte[prfSize];
+                System.arraycopy(tmp, 0, rval, 0, prfSize);
+                return rval;
+            } catch (Exception e) {
+                e.printStackTrace();
+                return null; //TODO: yuck
+            }
+        } else {
+            return PRF(master_secret, "key expansion",
+                    concat(server_random, client_random), prfSize);
+        }
+    }
+
+    static final byte[] MD5_pad1 = genPad(0x36, 48);
+    static final byte[] MD5_pad2 = genPad(0x5c, 48);
+
+    static final byte[] SHA_pad1 = genPad(0x36, 40);
+    static final byte[] SHA_pad2 = genPad(0x5c, 40);
+
+    private static byte[] genPad(int b, int count) {
+        byte[] padding = new byte[count];
+        Arrays.fill(padding, (byte) b);
+        return padding;
+    }
+
+    static final byte[] SSL_CLIENT = { 0x43, 0x4C, 0x4E, 0x54 };
+    static final byte[] SSL_SERVER = { 0x53, 0x52, 0x56, 0x52 };
+
+    // SSL3 magic mix constants ("A", "BB", "CCC", ...)
+    final static byte[][] SSL3_CONST = genConst();
+
+    private static byte[][] genConst() {
+        int n = 10;
+        byte[][] arr = new byte[n][];
+        for (int i = 0; i < n; i++) {
+            byte[] b = new byte[i + 1];
+            Arrays.fill(b, (byte)('A' + i));
+            arr[i] = b;
+        }
+        return arr;
     }
 }

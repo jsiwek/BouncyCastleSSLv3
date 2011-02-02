@@ -86,18 +86,41 @@ public class BCTlsTest extends TestCase {
 
     /**
      * BouncyCastle client to JSSE server tests
-     * TODO: test different combinations of SSL & TLS versions and client auth
      * @throws Exception when the tests fail to run
      */
     public void testBCtoJSSEConnections() throws Exception {
-        SSLConnectionServer server = new SSLConnectionServer(BOTH, false);
-        JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
-        st.start();
-        Thread.yield();
+        List<String[]> protoVariations = new LinkedList<String[]>();
+        protoVariations.add(TLSv1);
+        protoVariations.add(SSLv3);
+        protoVariations.add(BOTH);
 
-        byte[] recv = BCClientConnect(BOTH, BC_TEST_PORT, MSG);
+        // TODO: test client authentication
+        boolean[] clientAuthVariations = new boolean[] {false};
 
-        assertTrue(Arrays.areEqual(MSG, recv));
+        for (String[] p : protoVariations) {
+            for (boolean ca : clientAuthVariations) {
+                SSLConnectionServer server = new SSLConnectionServer(p, ca);
+                JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
+                st.start();
+                Thread.yield();
+
+                byte[] recv = BCClientConnect(p, BC_TEST_PORT, MSG);
+
+                assertTrue(Arrays.areEqual(MSG, recv));
+            }
+        }
+
+        // Test downgrade from TLSv1 to SSLv3
+        for (boolean ca: clientAuthVariations) {
+            SSLConnectionServer server = new SSLConnectionServer(BOTH, ca);
+            JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
+            st.start();
+            Thread.yield();
+
+            byte[] recv = BCClientConnect(SSLv3, BC_TEST_PORT, MSG);
+
+            assertTrue(Arrays.areEqual(MSG, recv));
+        }
     }
 
     /**
@@ -131,6 +154,7 @@ public class BCTlsTest extends TestCase {
         TlsProtocolHandler handler = new TlsProtocolHandler(
                 s.getInputStream(),
                 s.getOutputStream());
+        handler.setEnabledProtocols(protos);
         handler.connect(verifier);
         InputStream is = handler.getInputStream();
         OutputStream os = handler.getOutputStream();
@@ -164,30 +188,43 @@ public class BCTlsTest extends TestCase {
      * It's expected that a file called "helloworld" exist in the working
      * directory that contains data that the server is will return to
      * connected clients.
-     * TODO: test different combinations of SSL & TLS versions and client auth
      * @throws Exception when the tests fail to run
      */
     public void testBCtoOpenSSLConnections() throws Exception {
-        Process server = startOpenSSLServer(OPENSSL_TEST_PORT, false, BOTH);
+        List<String[]> protoVariations = new LinkedList<String[]>();
+        protoVariations.add(TLSv1);
+        protoVariations.add(SSLv3);
+        protoVariations.add(BOTH);
 
-        try {
-            Thread.sleep(1000);
-            int exitVal = server.exitValue();
-            System.err.println("OpenSSL server exited with status " + exitVal);
-            InputStream err = server.getErrorStream();
-            byte[] errBytes = new byte[err.available()];
-            err.read(errBytes, 0, errBytes.length);
-            System.err.println(new String(errBytes));
-        } catch (IllegalThreadStateException e) {
-            // This is expected (the server should not have exited yet)
+        // TODO: test client authentication
+        boolean[] clientAuthVariations = new boolean[] {false};
+
+        for (String[] p : protoVariations) {
+            for (boolean ca : clientAuthVariations) {
+                Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, p);
+
+                String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
+                byte[] recv = BCClientConnect(p, OPENSSL_TEST_PORT,
+                                              msg.getBytes());
+
+                String recvMsg = new String(recv);
+                assertTrue(recvMsg.contains(new String(MSG)));
+                server.destroy();
+            }
         }
 
-        String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
-        byte[] recv = BCClientConnect(BOTH, OPENSSL_TEST_PORT, msg.getBytes());
+        // Test TLSv1 to SSLv3 connection downgrade
+        for (boolean ca : clientAuthVariations) {
+            Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, BOTH);
 
-        String recvMsg = new String(recv);
-        assertTrue(recvMsg.contains(new String(MSG)));
-        server.destroy();
+            String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
+            byte[] recv = BCClientConnect(SSLv3, OPENSSL_TEST_PORT,
+                                          msg.getBytes());
+
+            String recvMsg = new String(recv);
+            assertTrue(recvMsg.contains(new String(MSG)));
+            server.destroy();
+        }
     }
 
     /**
@@ -216,7 +253,25 @@ public class BCTlsTest extends TestCase {
             command += " -tls1";
         }
 
-        return Runtime.getRuntime().exec(command);
+        Process server = Runtime.getRuntime().exec(command);
+
+        // Check whether the server prematurely exited
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) { }
+
+        try {
+            int exitVal = server.exitValue();
+            System.err.println("OpenSSL server exited with status " + exitVal);
+            InputStream err = server.getErrorStream();
+            byte[] errBytes = new byte[err.available()];
+            err.read(errBytes, 0, errBytes.length);
+            System.err.println(new String(errBytes));
+        } catch (IllegalThreadStateException e) {
+            // This is expected (the server should not have exited yet)
+        }
+
+        return server;
     }
 
     public static TestSuite suite() {

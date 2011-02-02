@@ -19,7 +19,7 @@ import org.bouncycastle.crypto.params.RSAKeyParameters;
 import org.bouncycastle.crypto.util.PublicKeyFactory;
 
 /**
- * TLS 1.0 RSA key exchange.
+ * TLS 1.0 and SSLv3 RSA key exchange.
  */
 class TlsRSAKeyExchange implements TlsKeyExchange
 {
@@ -107,7 +107,7 @@ class TlsRSAKeyExchange implements TlsKeyExchange
          */
         premasterSecret = new byte[48];
         handler.getRandom().nextBytes(premasterSecret);
-        TlsUtils.writeVersion(premasterSecret, 0);
+        handler.writeClientVersion(premasterSecret, 0);
 
         PKCS1Encoding encoding = new PKCS1Encoding(new RSABlindedEngine());
         encoding.init(true, new ParametersWithRandom(this.rsaServerPublicKey, handler.getRandom()));
@@ -115,8 +115,14 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         try
         {
             byte[] keData = encoding.processBlock(premasterSecret, 0, premasterSecret.length);
-            TlsUtils.writeUint24(keData.length + 2, os);
-            TlsUtils.writeOpaque16(keData, os);
+            if (handler.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
+                // SSLv3 implementations don't use the length of data
+                TlsUtils.writeUint24(keData.length, os);
+                os.write(keData);
+            } else {
+                TlsUtils.writeUint24(keData.length + 2, os);
+                TlsUtils.writeOpaque16(keData, os);
+            }
         }
         catch (InvalidCipherTextException e)
         {
