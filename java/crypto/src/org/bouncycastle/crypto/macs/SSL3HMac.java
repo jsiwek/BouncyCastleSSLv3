@@ -20,11 +20,11 @@ public class SSL3HMac
     private final static byte IPAD = (byte)0x36;
     private final static byte OPAD = (byte)0x5C;
 
-    private static final byte[] MD5_pad1 = genPad(0x36, 48);
-    private static final byte[] MD5_pad2 = genPad(0x5c, 48);
+    public static final byte[] MD5_pad1 = genPad(0x36, 48);
+    public static final byte[] MD5_pad2 = genPad(0x5c, 48);
 
-    private static final byte[] SHA_pad1 = genPad(0x36, 40);
-    private static final byte[] SHA_pad2 = genPad(0x5c, 40);
+    public static final byte[] SHA_pad1 = genPad(0x36, 40);
+    public static final byte[] SHA_pad2 = genPad(0x5c, 40);
 
     private Digest digest;
     private int digestSize;

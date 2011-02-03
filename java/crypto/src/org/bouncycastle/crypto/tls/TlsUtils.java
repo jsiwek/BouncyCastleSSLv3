@@ -4,9 +4,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.DigestException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 
 import org.bouncycastle.asn1.DERBitString;
@@ -18,6 +15,7 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.MD5Digest;
 import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.crypto.macs.HMac;
+import org.bouncycastle.crypto.macs.SSL3HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.io.Streams;
@@ -291,47 +289,44 @@ public class TlsUtils
 
     // TODO: clean up and refactor SSLv3 versus TLsv1 utility functions below
 
-    protected static void updateDigest(MessageDigest md, byte[] hs_msgs,
+    // This is similar to SSL3HMac, but the secret key does not get put in first
+    private static void updateDigest(Digest md, byte[] hs_msgs,
                       byte[] sender, byte[] secret, byte[] pad1, byte[] pad2) {
-        md.update(hs_msgs);
-        if (sender != null) md.update(sender);
-        md.update(secret);
-        md.update(pad1);
+        md.update(hs_msgs, 0, hs_msgs.length);
+        if (sender != null) md.update(sender, 0, sender.length);
+        md.update(secret, 0, secret.length);
+        md.update(pad1, 0, pad1.length);
 
-        byte[] tmp = md.digest();
+        byte[] tmp = new byte[md.getDigestSize()];
+        md.doFinal(tmp, 0);
 
-        md.update(secret);
-        md.update(pad2);
-        md.update(tmp);
+        md.update(secret, 0, secret.length);
+        md.update(pad2, 0, pad2.length);
+        md.update(tmp, 0, tmp.length);
     }
 
     // byte[] sender only sent for finish message
     protected static byte[] getSSLHandshakeHash(byte[] sender, byte[] secret,
-                                                byte[] handshake_messages)
-            throws DigestException, NoSuchAlgorithmException {
-        MessageDigest md5 = MessageDigest.getInstance("MD5");
-        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+                                                byte[] handshake_messages) {
+        Digest md5 = new MD5Digest();
+        Digest sha1 = new SHA1Digest();
 
-        updateDigest(md5, handshake_messages, sender, secret, MD5_pad1, MD5_pad2);
-        updateDigest(sha1, handshake_messages, sender, secret, SHA_pad1, SHA_pad2);
+        updateDigest(md5, handshake_messages, sender, secret,
+                     SSL3HMac.MD5_pad1, SSL3HMac.MD5_pad2);
+        updateDigest(sha1, handshake_messages, sender, secret,
+                     SSL3HMac.SHA_pad1, SSL3HMac.SHA_pad2);
 
         byte[] rval = new byte[36];
 
-        md5.digest(rval, 0, 16);
-        sha1.digest(rval, 16, 20);
+        md5.doFinal(rval, 0);
+        sha1.doFinal(rval, 16);
         return rval;
     }
 
     protected static byte[] getCertVerify(TlsProtocolVersion p, byte[] secret,
-                                          byte[] handshake_messages)
-            throws IOException {
+                                          byte[] handshake_messages) {
         if (p == TlsProtocolVersion.SSLv3) {
-            try {
-                return getSSLHandshakeHash(null, secret, handshake_messages);
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new IOException(e);
-            }
+            return getSSLHandshakeHash(null, secret, handshake_messages);
         } else {
             CombinedHash hash = new CombinedHash();
             hash.update(handshake_messages, 0, handshake_messages.length);
@@ -343,17 +338,10 @@ public class TlsUtils
 
     protected static byte[] getFinishedMsg(TlsProtocolVersion p, byte[] secret,
                                         byte[] handshake_messages, String msg,
-                                        byte[] sender)
-            throws IOException {
+                                        byte[] sender) {
         byte[] verifyData;
         if (p == TlsProtocolVersion.SSLv3) {
-            try {
-                verifyData = getSSLHandshakeHash(sender,
-                        secret, handshake_messages);
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new IOException(e);
-            }
+            verifyData = getSSLHandshakeHash(sender, secret, handshake_messages);
         } else {
             CombinedHash hash = new CombinedHash();
             hash.update(handshake_messages, 0, handshake_messages.length);
@@ -369,27 +357,30 @@ public class TlsUtils
     protected static byte[] calculateMasterSecret(TlsProtocolVersion p,
                                                   byte[] pre_master_secret,
                                                   byte[] client_random,
-                                                  byte[] server_random)
-            throws IOException {
+                                                  byte[] server_random) {
         if (p == TlsProtocolVersion.SSLv3) {
-            try {
-                MessageDigest md5 = MessageDigest.getInstance("MD5");
-                MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            Digest md5 = new MD5Digest();
+            Digest sha1 = new SHA1Digest();
+            byte[] shatmp = new byte[sha1.getDigestSize()];
+            byte[] md5tmp = new byte[md5.getDigestSize()];
 
-                byte rval[] = new byte[0];
+            byte rval[] = new byte[0];
 
-                for (int i = 0; i < 3; ++i) {
-                    rval = concat(rval,
-                        md5.digest(concat(pre_master_secret,
-                        sha1.digest(concat(SSL3_CONST[i],
-                                    concat(pre_master_secret,
-                                    concat(client_random, server_random)))))));
-                }
+            for (int i = 0; i < 3; ++i) {
+                byte[] block = concat(SSL3_CONST[i],
+                               concat(pre_master_secret,
+                               concat(client_random, server_random)));
+                sha1.update(block, 0, block.length);
+                sha1.doFinal(shatmp, 0);
 
-                return rval;
-            } catch (Exception e) {
-                throw new IOException(e);
+                block = concat(pre_master_secret, shatmp);
+                md5.update(block, 0, block.length);
+                md5.doFinal(md5tmp, 0);
+
+                rval = concat(rval, md5tmp);
             }
+
+            return rval;
         } else {
             return PRF(pre_master_secret, "master secret",
                     concat(client_random, server_random), 48);
@@ -401,52 +392,44 @@ public class TlsUtils
                                                byte[] client_random,
                                                byte[] server_random) {
         if (p == TlsProtocolVersion.SSLv3) {
-            try {
-                int i = 0;
-                byte tmp[] = new byte[0];
+            int i = 0;
+            byte tmp[] = new byte[0];
 
-                MessageDigest md5 = MessageDigest.getInstance("MD5");
-                MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
+            Digest md5 = new MD5Digest();
+            Digest sha1 = new SHA1Digest();
+            byte[] shatmp = new byte[sha1.getDigestSize()];
+            byte[] md5tmp = new byte[md5.getDigestSize()];
 
-                while (tmp.length < prfSize) {
-                    tmp = concat(tmp,
-                        md5.digest(concat(master_secret,
-                        sha1.digest(concat(SSL3_CONST[i],
-                                    concat(master_secret,
-                                    concat(server_random, client_random)))))));
-                    ++i;
-                }
+            while (tmp.length < prfSize) {
+                byte[] block = concat(SSL3_CONST[i],
+                               concat(master_secret,
+                               concat(server_random, client_random)));
+                sha1.update(block, 0, block.length);
+                sha1.doFinal(shatmp, 0);
 
-                byte rval[] = new byte[prfSize];
-                System.arraycopy(tmp, 0, rval, 0, prfSize);
-                return rval;
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null; //TODO: yuck
+                block = concat(master_secret, shatmp);
+                md5.update(block, 0, block.length);
+                md5.doFinal(md5tmp, 0);
+
+                tmp = concat(tmp, md5tmp);
+
+                ++i;
             }
+
+            byte rval[] = new byte[prfSize];
+            System.arraycopy(tmp, 0, rval, 0, prfSize);
+            return rval;
         } else {
             return PRF(master_secret, "key expansion",
                     concat(server_random, client_random), prfSize);
         }
     }
 
-    static final byte[] MD5_pad1 = genPad(0x36, 48);
-    static final byte[] MD5_pad2 = genPad(0x5c, 48);
-
-    static final byte[] SHA_pad1 = genPad(0x36, 40);
-    static final byte[] SHA_pad2 = genPad(0x5c, 40);
-
-    private static byte[] genPad(int b, int count) {
-        byte[] padding = new byte[count];
-        Arrays.fill(padding, (byte) b);
-        return padding;
-    }
-
-    static final byte[] SSL_CLIENT = { 0x43, 0x4C, 0x4E, 0x54 };
-    static final byte[] SSL_SERVER = { 0x53, 0x52, 0x56, 0x52 };
+    protected static final byte[] SSL_CLIENT = { 0x43, 0x4C, 0x4E, 0x54 };
+    protected static final byte[] SSL_SERVER = { 0x53, 0x52, 0x56, 0x52 };
 
     // SSL3 magic mix constants ("A", "BB", "CCC", ...)
-    final static byte[][] SSL3_CONST = genConst();
+    protected final static byte[][] SSL3_CONST = genConst();
 
     private static byte[][] genConst() {
         int n = 10;
