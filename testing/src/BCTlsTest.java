@@ -49,6 +49,18 @@ public class BCTlsTest extends TestCase {
     private static final String[][] protoVariations = {TLSv1, SSLv3, BOTH};
     private static final boolean[] clientAuthVariations = {false, true};
 
+    private void printTestName(String clientImpl, String serverImpl,
+                               String[] clientProtos, String[] serverProtos,
+                               boolean clientAuth) {
+        System.out.println("Testing:\n" +
+                           "Client: " + clientImpl + " " +
+                           java.util.Arrays.toString(clientProtos) + "\n" +
+                           "Server: " + serverImpl + " " +
+                           java.util.Arrays.toString(serverProtos) + "\n" +
+                           "ClientAuth: " + clientAuth
+                           );
+    }
+
     /**
      * JSSE client to JSSE server tests
      * TLSv1, SSLv3 and downgrading TLSv1->SSLv3 are tested with and without
@@ -58,6 +70,7 @@ public class BCTlsTest extends TestCase {
     public void testJSSEtoJSSEConnections() throws Exception {
         for (String[] p : protoVariations) {
             for (boolean ca : clientAuthVariations) {
+                printTestName("JSSE", "JSSE", p, p, ca);
                 SSLConnectionServer server = new SSLConnectionServer(p, ca);
                 JSSEServerThread st = new JSSEServerThread(server, JSSE_TEST_PORT);
                 st.start();
@@ -68,6 +81,7 @@ public class BCTlsTest extends TestCase {
 
         // Test client downgrade from TLSv1 to SSLv3
         for (boolean ca: clientAuthVariations) {
+            printTestName("JSSE", "JSSE", BOTH, SSLv3, ca);
             SSLConnectionServer server = new SSLConnectionServer(SSLv3, ca);
             JSSEServerThread st = new JSSEServerThread(server, JSSE_TEST_PORT);
             st.start();
@@ -110,6 +124,7 @@ public class BCTlsTest extends TestCase {
     public void testBCtoJSSEConnections() throws Exception {
         for (String[] p : protoVariations) {
             for (boolean ca : clientAuthVariations) {
+                printTestName("BC", "JSSE", p, p, ca);
                 SSLConnectionServer server = new SSLConnectionServer(p, ca);
                 JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
                 st.start();
@@ -123,6 +138,7 @@ public class BCTlsTest extends TestCase {
 
         // Test client downgrade from TLSv1 to SSLv3
         for (boolean ca: clientAuthVariations) {
+            printTestName("BC", "JSSE", BOTH, SSLv3, ca);
             SSLConnectionServer server = new SSLConnectionServer(SSLv3, ca);
             JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
             st.start();
@@ -201,6 +217,7 @@ public class BCTlsTest extends TestCase {
     public void testBCtoOpenSSLConnections() throws Exception {
         for (String[] p : protoVariations) {
             for (boolean ca : clientAuthVariations) {
+                printTestName("BC", "OpenSSL", p, p, ca);
                 Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, p);
 
                 String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
@@ -220,6 +237,7 @@ public class BCTlsTest extends TestCase {
 
         // Test client downgrade from TLSv1 to SSLv3
         for (boolean ca : clientAuthVariations) {
+            printTestName("BC", "OpenSSL", BOTH, SSLv3, ca);
             Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, SSLv3);
 
             String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
@@ -384,8 +402,7 @@ public class BCTlsTest extends TestCase {
             return new TestTlsAuth(new AlwaysValidVerifyer());
         }
 
-        public int[] getCipherSuites()
-        {
+        public int[] getCipherSuites() {
             return new int[] {
                     CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA,
                     CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
