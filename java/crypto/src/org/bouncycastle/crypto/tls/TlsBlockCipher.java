@@ -14,25 +14,26 @@ import org.bouncycastle.util.Arrays;
  */
 public class TlsBlockCipher implements TlsCipher
 {
-    private TlsProtocolHandler handler;
+    protected TlsClientContext context;
 
-    private BlockCipher encryptCipher;
-    private BlockCipher decryptCipher;
+    protected BlockCipher encryptCipher;
+    protected BlockCipher decryptCipher;
 
-    private TlsMac writeMac;
-    private TlsMac readMac;
+    protected TlsMac writeMac;
+    protected TlsMac readMac;
 
-    TlsBlockCipher(TlsProtocolHandler handler, BlockCipher encryptCipher,
-        BlockCipher decryptCipher, Digest writeDigest, Digest readDigest, int cipherKeySize,
-        SecurityParameters securityParameters)
+    public TlsBlockCipher(TlsClientContext context, BlockCipher encryptCipher,
+        BlockCipher decryptCipher, Digest writeDigest, Digest readDigest, int cipherKeySize)
     {
-        this.handler = handler;
+        this.context = context;
         this.encryptCipher = encryptCipher;
         this.decryptCipher = decryptCipher;
 
         int prfSize = (2 * cipherKeySize) + writeDigest.getDigestSize()
             + readDigest.getDigestSize() + encryptCipher.getBlockSize()
             + decryptCipher.getBlockSize();
+
+        SecurityParameters securityParameters = context.getSecurityParameters();
 
         byte[] key_block = TlsUtils.PRF(securityParameters.masterSecret, "key expansion",
             TlsUtils.concat(securityParameters.serverRandom, securityParameters.clientRandom),
@@ -71,7 +72,7 @@ public class TlsBlockCipher implements TlsCipher
         // Add a random number of extra blocks worth of padding
         int minPaddingSize = blocksize - ((len + writeMac.getSize() + 1) % blocksize);
         int maxExtraPadBlocks = (255 - minPaddingSize) / blocksize;
-        int actualExtraPadBlocks = chooseExtraPadBlocks(handler.getRandom(), maxExtraPadBlocks);
+        int actualExtraPadBlocks = chooseExtraPadBlocks(context.getSecureRandom(), maxExtraPadBlocks);
         int paddingsize = minPaddingSize + (actualExtraPadBlocks * blocksize);
 
         int totalsize = len + writeMac.getSize() + paddingsize + 1;

@@ -11,7 +11,7 @@ import java.util.Hashtable;
 import java.util.Vector;
 
 import org.bouncycastle.asn1.ASN1Object;
-import org.bouncycastle.asn1.x509.X509Name;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.crypto.prng.ThreadedSeedGenerator;
 import org.bouncycastle.util.Arrays;
 
@@ -66,13 +66,15 @@ public class TlsProtocolHandler
 
     private SecurityParameters securityParameters = null;
 
+    private TlsClientContextImpl tlsClientContext = null;
     private TlsClient tlsClient = null;
     private int[] offeredCipherSuites = null;
     private short[] offeredCompressionMethods = null;
     private TlsKeyExchange keyExchange = null;
+    private TlsAuthentication authentication = null;
+    private CertificateRequest certificateRequest = null;
 
     private short connection_state = 0;
-    private boolean anonymous_server = true;
 
     private static SecureRandom createSecureRandom()
     {
@@ -100,11 +102,6 @@ public class TlsProtocolHandler
     {
         this.rs = new RecordStream(this, is, os);
         this.random = sr;
-    }
-
-    SecureRandom getRandom()
-    {
-        return random;
     }
 
     protected void processData(short protocol, byte[] buf, int offset, int len) throws IOException
@@ -218,8 +215,10 @@ public class TlsProtocolHandler
 
                         assertEmpty(is);
 
-                        this.anonymous_server = false;
                         this.keyExchange.processServerCertificate(serverCertificate);
+
+                        this.authentication = tlsClient.getAuthentication();
+                        this.authentication.notifyServerCertificate(serverCertificate);
 
                         break;
                     }
@@ -433,7 +432,7 @@ public class TlsProtocolHandler
                             tlsClient.processServerExtensions(serverExtensions);
                         }
 
-                        this.keyExchange = tlsClient.createKeyExchange();
+                        this.keyExchange = tlsClient.getKeyExchange();
 
                         connection_state = CS_SERVER_HELLO_RECEIVED;
                         break;
@@ -456,13 +455,30 @@ public class TlsProtocolHandler
 
                         assertEmpty(is);
 
-                        boolean isClientCertificateRequested = (connection_state == CS_CERTIFICATE_REQUEST_RECEIVED);
-
                         connection_state = CS_SERVER_HELLO_DONE_RECEIVED;
 
-                        if (isClientCertificateRequested)
+                        TlsCredentials clientCreds = null;
+                        if (certificateRequest == null)
                         {
-                            sendClientCertificate(tlsClient.getCertificate());
+                            this.keyExchange.skipClientCredentials();
+                        }
+                        else
+                        {
+                            clientCreds = this.authentication.getClientCredentials(certificateRequest);
+
+                            Certificate clientCert;
+                            if (clientCreds == null)
+                            {
+                                this.keyExchange.skipClientCredentials();
+                                clientCert = Certificate.EMPTY_CHAIN;
+                            }
+                            else
+                            {
+                                this.keyExchange.processClientCredentials(clientCreds);
+                                clientCert = clientCreds.getCertificate();
+                            }
+
+                            sendClientCertificate(clientCert);
                         }
 
                         /*
@@ -473,15 +489,15 @@ public class TlsProtocolHandler
 
                         connection_state = CS_CLIENT_KEY_EXCHANGE_SEND;
 
-                        if (isClientCertificateRequested)
+                        if (clientCreds != null && clientCreds instanceof TlsSignerCredentials)
                         {
-                            byte[] clientCertificateSignature = tlsClient.generateCertificateSignature(rs.getCurrentHash());
-                            if (clientCertificateSignature != null)
-                            {
-                                sendCertificateVerify(clientCertificateSignature);
+                            TlsSignerCredentials signerCreds = (TlsSignerCredentials)clientCreds;
+                            byte[] md5andsha1 = rs.getCurrentHash();
+                            byte[] clientCertificateSignature = signerCreds.generateCertificateSignature(
+                                md5andsha1);
+                            sendCertificateVerify(clientCertificateSignature);
 
-                                connection_state = CS_CERTIFICATE_VERIFY_SEND;
-                            }
+                            connection_state = CS_CERTIFICATE_VERIFY_SEND;
                         }
 
                         /*
@@ -513,7 +529,7 @@ public class TlsProtocolHandler
                         /*
                          * Initialize our cipher suite
                          */
-                        rs.clientCipherSpecDecided(tlsClient.createCipher(securityParameters));
+                        rs.clientCipherSpecDecided(tlsClient.getCompression(), tlsClient.getCipher());
 
                         /*
                          * Send our finished message.
@@ -541,14 +557,14 @@ public class TlsProtocolHandler
                     case CS_SERVER_HELLO_RECEIVED:
 
                         // There was no server certificate message; check it's OK
-                        this.anonymous_server = true;
                         this.keyExchange.skipServerCertificate();
+                        this.authentication = null;
 
                         // NB: Fall through to next case label
 
                     case CS_SERVER_CERTIFICATE_RECEIVED:
 
-                        this.keyExchange.processServerKeyExchange(is, securityParameters);
+                        this.keyExchange.processServerKeyExchange(is);
 
                         assertEmpty(is);
                         break;
@@ -573,7 +589,7 @@ public class TlsProtocolHandler
 
                     case CS_SERVER_KEY_EXCHANGE_RECEIVED:
                     {
-                    	if (this.anonymous_server)
+                    	if (this.authentication == null)
                     	{
                             /*
                              * RFC 2246 7.4.4. It is a fatal handshake_failure alert
@@ -599,11 +615,12 @@ public class TlsProtocolHandler
                         while (bis.available() > 0)
                         {
                             byte[] dnBytes = TlsUtils.readOpaque16(bis);
-                            authorityDNs.add(X509Name.getInstance(ASN1Object.fromByteArray(dnBytes)));
+                            authorityDNs.add(X500Name.getInstance(ASN1Object.fromByteArray(dnBytes)));
                         }
 
-                        this.tlsClient.processServerCertificateRequest(certificateTypes,
+                        this.certificateRequest = new CertificateRequest(certificateTypes,
                             authorityDNs);
+                        this.keyExchange.validateCertificateRequest(this.certificateRequest);
 
                         break;
                     }
@@ -778,21 +795,13 @@ public class TlsProtocolHandler
      * @param verifyer Will be used when a certificate is received to verify that this
      *            certificate is accepted by the client.
      * @throws IOException If handshake was not successful.
+     * 
+     * @deprecated use version taking TlsClient
      */
-    // TODO Deprecate
     public void connect(CertificateVerifyer verifyer) throws IOException
     {
-        this.connect(new DefaultTlsClient(verifyer));
+        this.connect(new LegacyTlsClient(verifyer));
     }
-
-//    public void connect(CertificateVerifyer verifyer, Certificate clientCertificate,
-//        AsymmetricKeyParameter clientPrivateKey) throws IOException
-//    {
-//        DefaultTlsClient client = new DefaultTlsClient(verifyer);
-//        client.enableClientAuthentication(clientCertificate, clientPrivateKey);
-//
-//        this.connect(client);
-//    }
 
     /**
      * Connects to the remote system using client authentication
@@ -800,8 +809,7 @@ public class TlsProtocolHandler
      * @param tlsClient
      * @throws IOException If handshake was not successful.
      */
-    // TODO Make public
-    void connect(TlsClient tlsClient) throws IOException
+    public void connect(TlsClient tlsClient) throws IOException
     {
         if (tlsClient == null)
         {
@@ -812,18 +820,19 @@ public class TlsProtocolHandler
             throw new IllegalStateException("connect can only be called once");
         }
 
-        this.tlsClient = tlsClient;
-        this.tlsClient.init(this);
-
         /*
          * Send Client hello
          * 
          * First, generate some random data.
          */
-        securityParameters = new SecurityParameters();
-        securityParameters.clientRandom = new byte[32];
+        this.securityParameters = new SecurityParameters();
+        this.securityParameters.clientRandom = new byte[32];
         random.nextBytes(securityParameters.clientRandom);
         TlsUtils.writeGMTUnixTime(securityParameters.clientRandom, 0);
+
+        this.tlsClientContext = new TlsClientContextImpl(random, securityParameters);
+        this.tlsClient = tlsClient;
+        this.tlsClient.init(tlsClientContext);
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
         TlsUtils.writeVersion(os);
@@ -840,7 +849,7 @@ public class TlsProtocolHandler
         this.offeredCipherSuites = this.tlsClient.getCipherSuites();
 
         // Integer -> byte[]
-        this.clientExtensions = this.tlsClient.generateClientExtensions();
+        this.clientExtensions = this.tlsClient.getClientExtensions();
 
         // Cipher Suites (and SCSV)
         {

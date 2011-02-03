@@ -6,7 +6,6 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-import java.security.PublicKey;
 import java.security.Signature;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -15,23 +14,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 import javax.crypto.Cipher;
-import javax.security.auth.x500.X500Principal;
 
-import org.bouncycastle.asn1.ASN1Object;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.DEREncodable;
 import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.cryptopro.CryptoProObjectIdentifiers;
+import org.bouncycastle.asn1.kisa.KISAObjectIdentifiers;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.asn1.ntt.NTTObjectIdentifiers;
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.RSASSAPSSparams;
 import org.bouncycastle.asn1.teletrust.TeleTrusTObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.jcajce.JcaJceHelper;
@@ -41,6 +37,7 @@ class OperatorHelper
 {
     private static final Map oids = new HashMap();
     private static final Map asymmetricWrapperAlgNames = new HashMap();
+    private static final Map symmetricWrapperAlgNames = new HashMap();
 
     static
     {
@@ -69,6 +66,15 @@ class OperatorHelper
         oids.put(NISTObjectIdentifiers.dsa_with_sha256, "SHA256WITHDSA");
 
         asymmetricWrapperAlgNames.put(new ASN1ObjectIdentifier(PKCSObjectIdentifiers.rsaEncryption.getId()), "RSA/ECB/PKCS1Padding");
+
+        symmetricWrapperAlgNames.put(PKCSObjectIdentifiers.id_alg_CMS3DESwrap, "DESEDEWrap");
+        symmetricWrapperAlgNames.put(NISTObjectIdentifiers.id_aes128_wrap, "AESWrap");
+        symmetricWrapperAlgNames.put(NISTObjectIdentifiers.id_aes192_wrap, "AESWrap");
+        symmetricWrapperAlgNames.put(NISTObjectIdentifiers.id_aes256_wrap, "AESWrap");
+        symmetricWrapperAlgNames.put(NTTObjectIdentifiers.id_camellia128_wrap, "CamilliaWrap");
+        symmetricWrapperAlgNames.put(NTTObjectIdentifiers.id_camellia192_wrap, "CamilliaWrap");
+        symmetricWrapperAlgNames.put(NTTObjectIdentifiers.id_camellia256_wrap, "CamilliaWrap");
+        symmetricWrapperAlgNames.put(KISAObjectIdentifiers.id_npki_app_cmsSeed_wrap, "SEEDWrap");
     }
 
     private JcaJceHelper helper;
@@ -78,44 +84,39 @@ class OperatorHelper
         this.helper = helper;
     }
 
-    static X509Name convertName(
-        X500Principal name)
-    {
-        try
-        {
-            return new X509Name(ASN1Sequence.getInstance(ASN1Object.fromByteArray(name.getEncoded())));
-        }
-        catch (IOException e)
-        {
-            throw new IllegalArgumentException("can't convert name");
-        }
-    }
-
-    static SubjectPublicKeyInfo getPublicKeyInfo(PublicKey key)
-    {
-        byte[] encoded = key.getEncoded();
-
-        if (encoded == null)
-        {
-            throw new IllegalArgumentException("encoded key equals null");
-        }
-
-        try
-        {
-            return SubjectPublicKeyInfo.getInstance(ASN1Object.fromByteArray(encoded));
-        }
-        catch (IOException e)
-        {
-            throw new OpArgumentException("cannot convert public key: " + e.getMessage(), e);
-        }
-    }
-
     Cipher createAsymmetricWrapper(ASN1ObjectIdentifier algorithm)
         throws OperatorCreationException
     {
         try
         {
             String cipherName = (String)asymmetricWrapperAlgNames.get(algorithm);
+
+            if (cipherName != null)
+            {
+                try
+                {
+                    // this is reversed as the Sun policy files now allow unlimited strength RSA
+                    return helper.createCipher(cipherName);
+                }
+                catch (NoSuchAlgorithmException e)
+                {
+                    // Ignore
+                }
+            }
+            return helper.createCipher(algorithm.getId());
+        }
+        catch (GeneralSecurityException e)
+        {
+            throw new OperatorCreationException("cannot create cipher: " + e.getMessage(), e);
+        }
+    }
+
+    Cipher createSymmetricWrapper(ASN1ObjectIdentifier algorithm)
+        throws OperatorCreationException
+    {
+        try
+        {
+            String cipherName = (String)symmetricWrapperAlgNames.get(algorithm);
 
             if (cipherName != null)
             {
@@ -307,25 +308,6 @@ class OperatorHelper
         catch (NoSuchProviderException e)
         {
             throw new OpCertificateException("cannot find factory provider: " + e.getMessage(), e);
-        }
-    }
-
-    // TODO: put somewhere public so cause easily accessed
-    private static class OpArgumentException
-        extends IllegalArgumentException
-    {
-        private Throwable cause;
-
-        public OpArgumentException(String msg, Throwable cause)
-        {
-            super(msg);
-
-            this.cause = cause;
-        }
-
-        public Throwable getCause()
-        {
-            return cause;
         }
     }
 

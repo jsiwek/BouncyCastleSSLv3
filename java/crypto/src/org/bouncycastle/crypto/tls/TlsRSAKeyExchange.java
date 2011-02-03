@@ -4,12 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.X509CertificateStructure;
-import org.bouncycastle.asn1.x509.X509Extension;
-import org.bouncycastle.asn1.x509.X509Extensions;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.encodings.PKCS1Encoding;
 import org.bouncycastle.crypto.engines.RSABlindedEngine;
@@ -23,8 +20,7 @@ import org.bouncycastle.crypto.util.PublicKeyFactory;
  */
 class TlsRSAKeyExchange implements TlsKeyExchange
 {
-    protected TlsProtocolHandler handler;
-    protected CertificateVerifyer verifyer;
+    protected TlsClientContext context;
 
     protected AsymmetricKeyParameter serverPublicKey = null;
 
@@ -32,10 +28,9 @@ class TlsRSAKeyExchange implements TlsKeyExchange
 
     protected byte[] premasterSecret;
 
-    TlsRSAKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer)
+    TlsRSAKeyExchange(TlsClientContext context)
     {
-        this.handler = handler;
-        this.verifyer = verifyer;
+        this.context = context;
     }
 
     public void skipServerCertificate() throws IOException
@@ -63,30 +58,16 @@ class TlsRSAKeyExchange implements TlsKeyExchange
             throw new TlsFatalAlert(AlertDescription.internal_error);
         }
 
+        this.rsaServerPublicKey = validateRSAPublicKey((RSAKeyParameters)this.serverPublicKey);
+
+        TlsUtils.validateKeyUsage(x509Cert, KeyUsage.keyEncipherment);
+
         // TODO 
         /*
          * Perform various checks per RFC2246 7.4.2: "Unless otherwise specified, the
          * signing algorithm for the certificate must be the same as the algorithm for the
          * certificate key."
          */
-
-        // TODO Should the 'instanceof' tests be replaces with stricter checks on keyInfo.getAlgorithmId()?
-
-        if (!(this.serverPublicKey instanceof RSAKeyParameters))
-        {
-            throw new TlsFatalAlert(AlertDescription.certificate_unknown);
-        }
-
-        validateKeyUsage(x509Cert, KeyUsage.keyEncipherment);
-        this.rsaServerPublicKey = validateRSAPublicKey((RSAKeyParameters)this.serverPublicKey);
-
-        /*
-         * Verify them.
-         */
-        if (!this.verifyer.isValid(serverCertificate.getCerts()))
-        {
-            throw new TlsFatalAlert(AlertDescription.user_canceled);
-        }
     }
 
     public void skipServerKeyExchange() throws IOException
@@ -94,10 +75,42 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         // OK
     }
 
-    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
+    public void processServerKeyExchange(InputStream is)
         throws IOException
     {
+        // TODO
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
+    }
+
+    public void validateCertificateRequest(CertificateRequest certificateRequest)
+        throws IOException
+    {
+        short[] types = certificateRequest.getCertificateTypes();
+        for (int i = 0; i < types.length; ++i)
+        {
+            switch (types[i])
+            {
+                case ClientCertificateType.rsa_sign:
+                case ClientCertificateType.dss_sign:
+                case ClientCertificateType.ecdsa_sign:
+                    break;
+                default:
+                    throw new TlsFatalAlert(AlertDescription.illegal_parameter);
+            }
+        }
+    }
+
+    public void skipClientCredentials() throws IOException
+    {
+        // OK
+    }
+
+    public void processClientCredentials(TlsCredentials clientCredentials) throws IOException
+    {
+        if (!(clientCredentials instanceof TlsSignerCredentials))
+        {
+            throw new TlsFatalAlert(AlertDescription.internal_error);
+        }
     }
 
     public void generateClientKeyExchange(OutputStream os) throws IOException
@@ -106,11 +119,11 @@ class TlsRSAKeyExchange implements TlsKeyExchange
          * Choose a PremasterSecret and send it encrypted to the server
          */
         premasterSecret = new byte[48];
-        handler.getRandom().nextBytes(premasterSecret);
+        context.getSecureRandom().nextBytes(premasterSecret);
         TlsUtils.writeVersion(premasterSecret, 0);
 
         PKCS1Encoding encoding = new PKCS1Encoding(new RSABlindedEngine());
-        encoding.init(true, new ParametersWithRandom(this.rsaServerPublicKey, handler.getRandom()));
+        encoding.init(true, new ParametersWithRandom(this.rsaServerPublicKey, context.getSecureRandom()));
 
         try
         {
@@ -134,24 +147,7 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         return tmp;
     }
 
-    protected void validateKeyUsage(X509CertificateStructure c, int keyUsageBits) throws IOException
-    {
-        X509Extensions exts = c.getTBSCertificate().getExtensions();
-        if (exts != null)
-        {
-            X509Extension ext = exts.getExtension(X509Extensions.KeyUsage);
-            if (ext != null)
-            {
-                DERBitString ku = KeyUsage.getInstance(ext);
-                int bits = ku.getBytes()[0] & 0xff;
-                if ((bits & keyUsageBits) != keyUsageBits)
-                {
-                    throw new TlsFatalAlert(AlertDescription.certificate_unknown);
-                }
-            }
-        }
-    }
-
+    // Would be needed to process RSA_EXPORT server key exchange
 //    protected void processRSAServerKeyExchange(InputStream is, Signer signer) throws IOException
 //    {
 //        InputStream sigIn = is;

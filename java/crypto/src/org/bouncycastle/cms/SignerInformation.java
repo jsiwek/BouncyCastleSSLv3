@@ -25,6 +25,7 @@ import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Null;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1Set;
@@ -42,9 +43,9 @@ import org.bouncycastle.asn1.cms.SignerInfo;
 import org.bouncycastle.asn1.cms.Time;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.DigestInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.operator.ContentVerifier;
 import org.bouncycastle.operator.ContentVerifierProvider;
-import org.bouncycastle.operator.DatedContentVerifier;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.RawContentVerifier;
@@ -64,8 +65,8 @@ public class SignerInformation
     private final ASN1Set           unsignedAttributeSet;
     private CMSProcessable          content;
     private byte[]                  signature;
-    private DERObjectIdentifier     contentType;
-    private IntDigestCalculator digestCalculator;
+    private ASN1ObjectIdentifier    contentType;
+    private IntDigestCalculator     digestCalculator;
     private byte[]                  resultDigest;
     private SignatureAlgorithmIdentifierFinder sigAlgFinder;
 
@@ -75,37 +76,28 @@ public class SignerInformation
 
     SignerInformation(
         SignerInfo          info,
-        DERObjectIdentifier contentType,
+        ASN1ObjectIdentifier contentType,
         CMSProcessable      content,
         IntDigestCalculator digestCalculator,
         SignatureAlgorithmIdentifierFinder sigAlgFinder)
     {
         this.info = info;
-        this.sid = new SignerId();
         this.contentType = contentType;
         this.sigAlgFinder = sigAlgFinder;
 
-        try
+        SignerIdentifier   s = info.getSID();
+
+        if (s.isTagged())
         {
-            SignerIdentifier   s = info.getSID();
+            ASN1OctetString octs = ASN1OctetString.getInstance(s.getId());
 
-            if (s.isTagged())
-            {
-                ASN1OctetString octs = ASN1OctetString.getInstance(s.getId());
-
-                sid.setSubjectKeyIdentifier(octs.getEncoded());
-            }
-            else
-            {
-                IssuerAndSerialNumber   iAnds = IssuerAndSerialNumber.getInstance(s.getId());
-
-                sid.setIssuer(iAnds.getName().getEncoded());
-                sid.setSerialNumber(iAnds.getSerialNumber().getValue());
-            }
+            sid = new SignerId(octs.getOctets());
         }
-        catch (IOException e)
+        else
         {
-            throw new IllegalArgumentException("invalid sid in SignerInfo");
+            IssuerAndSerialNumber   iAnds = IssuerAndSerialNumber.getInstance(s.getId());
+
+            sid = new SignerId(iAnds.getName(), iAnds.getSerialNumber().getValue());
         }
 
         this.digestAlgorithm = info.getDigestAlgorithm();
@@ -118,7 +110,7 @@ public class SignerInformation
         this.digestCalculator = digestCalculator;
     }
 
-    public DERObjectIdentifier getContentType()
+    public ASN1ObjectIdentifier getContentType()
     {
         return this.contentType;
     }
@@ -333,7 +325,10 @@ public class SignerInformation
 
         return null;
     }
-    
+
+    /**
+     * @deprecated
+     */
     private boolean doVerify(
         PublicKey       key,
         Provider        sigProvider)
@@ -552,20 +547,6 @@ public class SignerInformation
         String          digestName = CMSSignedHelper.INSTANCE.getDigestAlgName(this.getDigestAlgOID());
         String          encName = CMSSignedHelper.INSTANCE.getEncryptionAlgName(this.getEncryptionAlgOID());
 
-        if (verifier instanceof DatedContentVerifier)
-        {
-            Time signingTime = getSigningTime();
-            if (signingTime != null)
-            {
-                DatedContentVerifier dcv = (DatedContentVerifier)verifier;
-
-                if (!dcv.isValid(signingTime.getDate()))
-                {
-                    throw new CMSException("verifier not valid at signingTime");   
-                }
-            }
-        }
-
         try
         {
             MessageDigest   digest = CMSSignedHelper.INSTANCE.getDigestInstance(digestName, null);
@@ -759,7 +740,10 @@ public class SignerInformation
 
         return digInfo;
     }
-    
+
+    /**
+     * @deprecated
+     */
     private boolean verifyDigest(
         byte[]    digest, 
         PublicKey key,
@@ -943,8 +927,12 @@ public class SignerInformation
     }
 
     /**
-     * verify that the given signer can successfully verify the signature on
+     * Verify that the given verifierProvider can successfully verify the signature on
      * this SignerInformation object.
+     *
+     * @return true if the signer information is verified, false otherwise.
+     * @throws CMSVerifierCertificateNotValidException if the provider has an associated certificate and the certificate is not valid at the time given as the SignerInfo's signing time.
+     * @throws CMSException if the VerifierProvider is unable to create a verifier.
      */
     public boolean verify(ContentVerifierProvider verifierProvider)
         throws CMSException
@@ -955,6 +943,21 @@ public class SignerInformation
 
         try
         {
+            Time signingTime = getSigningTime();   // has to be validated if present.
+
+            if (verifierProvider.hasAssociatedCertificate())
+            {
+                if (signingTime != null)
+                {
+                    X509CertificateHolder dcv = verifierProvider.getAssociatedCertificate();
+
+                    if (!dcv.isValidOn(signingTime.getDate()))
+                    {
+                        throw new CMSVerifierCertificateNotValidException("verifier not valid at signingTime");
+                    }
+                }
+            }
+
             return doVerify(verifierProvider.get(sigAlgFinder.find(signatureName)));
         }
         catch (OperatorCreationException e)
@@ -967,8 +970,19 @@ public class SignerInformation
      * Return the base ASN.1 CMS structure that this object contains.
      * 
      * @return an object containing a CMS SignerInfo structure.
+     * @deprecated use toASN1Structure()
      */
     public SignerInfo toSignerInfo()
+    {
+        return info;
+    }
+
+    /**
+     * Return the underlying ASN.1 object defining this SignerInformation object.
+     *
+     * @return a SignerInfo.
+     */
+    public SignerInfo toASN1Structure()
     {
         return info;
     }

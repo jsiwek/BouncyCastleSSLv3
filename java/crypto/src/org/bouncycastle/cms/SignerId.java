@@ -1,15 +1,17 @@
 package org.bouncycastle.cms;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.cert.X509CertSelector;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
+import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.cms.IssuerAndSerialNumber;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.X509Extension;
-import org.bouncycastle.asn1.x509.X509Extensions;
-import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.Selector;
 
@@ -20,18 +22,65 @@ public class SignerId
     extends X509CertSelector
     implements Selector
 {
+    private byte[] subjectKeyId;
+
+    private X500Name issuer;
+    private BigInteger serialNumber;
+
+    /**
+     * @deprecated use specific constructor.
+     */
+    public SignerId()
+    {
+
+    }
+
+    /**
+     * Construct a signer ID with the value of a public key's subjectKeyId.
+     *
+     * @param subjectKeyId a subjectKeyId
+     */
+    public SignerId(byte[] subjectKeyId)
+    {
+        super.setSubjectKeyIdentifier(new DEROctetString(subjectKeyId).getDEREncoded());
+
+        this.subjectKeyId = subjectKeyId;
+    }
+
+    /**
+     * Construct a signer ID based on the issuer and serial number of the signer's associated
+     * certificate.
+     *
+     * @param issuer the issuer of the signer's associated certificate.
+     * @param serialNumber the serial number of the signer's associated certificate.
+     */
+    public SignerId(X500Name issuer, BigInteger serialNumber)
+    {
+        this.issuer = issuer;
+        this.serialNumber = serialNumber;
+        try
+        {
+            this.setIssuer(issuer.getDEREncoded());
+        }
+        catch (IOException e)
+        {
+            throw new IllegalArgumentException("invalid issuer: " + e.getMessage());
+        }
+        this.setSerialNumber(serialNumber);
+    }
+
     public int hashCode()
     {
-        int code = Arrays.hashCode(this.getSubjectKeyIdentifier());
+        int code = Arrays.hashCode(subjectKeyId);
 
-        if (this.getSerialNumber() != null)
+        if (this.serialNumber != null)
         {
-            code ^= this.getSerialNumber().hashCode();
+            code ^= this.serialNumber.hashCode();
         }
 
-        if (this.getIssuerAsString() != null)
+        if (this.issuer != null)
         {
-            code ^= this.getIssuerAsString().hashCode();
+            code ^= this.issuer.hashCode();
         }
 
         return code;
@@ -47,9 +96,9 @@ public class SignerId
 
         SignerId id = (SignerId)o;
 
-        return Arrays.areEqual(this.getSubjectKeyIdentifier(), id.getSubjectKeyIdentifier())
-            && equalsObj(this.getSerialNumber(), id.getSerialNumber())
-            && equalsObj(this.getIssuerAsString(), id.getIssuerAsString());
+        return Arrays.areEqual(subjectKeyId, id.subjectKeyId)
+            && equalsObj(this.serialNumber, id.serialNumber)
+            && equalsObj(this.issuer, id.issuer);
     }
 
     private boolean equalsObj(Object a, Object b)
@@ -67,30 +116,41 @@ public class SignerId
             {
                 IssuerAndSerialNumber iAndS = certHldr.getIssuerAndSerialNumber();
 
-                try
-                {
-                    return iAndS.getName().equals(X509Name.getInstance(this.getIssuerAsBytes()))
-                        && iAndS.getSerialNumber().getValue().equals(this.getSerialNumber());
-                }
-                catch (IOException e)
-                {
-                    return false;
-                }
+                return iAndS.getName().equals(this.issuer)
+                    && iAndS.getSerialNumber().getValue().equals(this.serialNumber);
             }
             else if (this.getSubjectKeyIdentifier() != null)
             {
-                X509Extension ext = certHldr.getExtension(new ASN1ObjectIdentifier(X509Extensions.SubjectKeyIdentifier.getId()));
+                X509Extension ext = certHldr.getExtension(X509Extension.subjectKeyIdentifier);
 
                 if (ext == null)
                 {
-                    return false;
+                    Digest dig = new SHA1Digest();
+                    byte[] hash = new byte[dig.getDigestSize()];
+                    byte[] spkiEnc = certHldr.getSubjectPublicKeyInfo().getDEREncoded();
+
+                    // try the outlook 2010 calculation
+                    dig.update(spkiEnc, 0, spkiEnc.length);
+
+                    dig.doFinal(hash, 0);
+
+                    return Arrays.areEqual(subjectKeyId, hash);
                 }
 
-                byte[] subKeyID = ASN1OctetString.getInstance(ext.getValue()).getOctets();
+                byte[] subKeyID = ASN1OctetString.getInstance(ext.getParsedValue()).getOctets();
 
-                return Arrays.areEqual(this.getSubjectKeyIdentifier(), subKeyID);
+                return Arrays.areEqual(subjectKeyId, subKeyID);
             }
         }
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
+        else if (obj instanceof byte[])
+        {
+            return Arrays.areEqual(subjectKeyId, (byte[])obj);
+        }
+        else if (obj instanceof SignerInformation)
+        {
+            return ((SignerInformation)obj).getSID().equals(this);
+        }
+
+        return false;
     }
 }

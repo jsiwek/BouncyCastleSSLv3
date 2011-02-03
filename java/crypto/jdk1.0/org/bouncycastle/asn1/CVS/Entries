@@ -4,13 +4,13 @@ D/test////
 D/util////
 D/x509////
 D/x9////
-/ASN1InputStream.java/1.4/Sun Oct 21 11:17:00 2007//D2010.11.21.06.00.00
-/BERInputStream.java/1.3/Wed Nov 29 04:08:00 2006//D2010.11.21.06.00.00
-/DERBMPString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
-/DERGeneralizedTime.java/1.2/Sat Dec 17 07:28:02 2005//D2010.11.21.06.00.00
-/DERIA5String.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
-/DERInputStream.java/1.3/Sat Sep 23 01:24:10 2006//D2010.11.21.06.00.00
-/DERPrintableString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
-/DERT61String.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
-/DERUTCTime.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
-/DERVisibleString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//D2010.11.21.06.00.00
+/ASN1InputStream.java/1.4/Sun Oct 21 11:17:00 2007//
+/BERInputStream.java/1.3/Wed Nov 29 04:08:00 2006//
+/DERBMPString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//
+/DERGeneralizedTime.java/1.2/Sat Dec 17 07:28:02 2005//
+/DERIA5String.java/1.1.1.1/Wed Jul  6 13:02:53 2005//
+/DERInputStream.java/1.3/Sat Sep 23 01:24:10 2006//
+/DERPrintableString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//
+/DERT61String.java/1.1.1.1/Wed Jul  6 13:02:53 2005//
+/DERUTCTime.java/1.1.1.1/Wed Jul  6 13:02:53 2005//
+/DERVisibleString.java/1.1.1.1/Wed Jul  6 13:02:53 2005//

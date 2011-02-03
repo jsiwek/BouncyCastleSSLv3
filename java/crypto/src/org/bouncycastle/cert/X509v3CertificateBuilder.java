@@ -5,15 +5,14 @@ import java.util.Date;
 
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.DERInteger;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.Time;
 import org.bouncycastle.asn1.x509.V3TBSCertificateGenerator;
 import org.bouncycastle.asn1.x509.X509CertificateStructure;
 import org.bouncycastle.asn1.x509.X509Extension;
 import org.bouncycastle.asn1.x509.X509ExtensionsGenerator;
-import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.operator.ContentSigner;
 
 
@@ -25,7 +24,17 @@ public class X509v3CertificateBuilder
     private V3TBSCertificateGenerator   tbsGen;
     private X509ExtensionsGenerator     extGenerator;
 
-    public X509v3CertificateBuilder(X509Name issuer, BigInteger serial, Date notBefore, Date notAfter, X509Name subject, SubjectPublicKeyInfo publicKeyInfo)
+    /**
+     * Create a builder for a version 3 certificate.
+     *
+     * @param issuer the certificate issuer
+     * @param serial the certificate serial number
+     * @param notBefore the date before which the certificate is not valid
+     * @param notAfter the date after which the certificate is not valid
+     * @param subject the certificate subject
+     * @param publicKeyInfo the info structure for the public key to be associated with this certificate.
+     */
+    public X509v3CertificateBuilder(X500Name issuer, BigInteger serial, Date notBefore, Date notAfter, X500Name subject, SubjectPublicKeyInfo publicKeyInfo)
     {
         tbsGen = new V3TBSCertificateGenerator();
         tbsGen.setSerialNumber(new DERInteger(serial));
@@ -39,45 +48,61 @@ public class X509v3CertificateBuilder
     }
 
     /**
-     * Set the subject unique ID - note: it is very rare that it is correct to do this.
+     * Set the subjectUniqueID - note: it is very rare that it is correct to do this.
+     *
+     * @param uniqueID a boolean array representing the bits making up the subjectUniqueID.
+     * @return this builder object.
      */
     public X509v3CertificateBuilder setSubjectUniqueID(boolean[] uniqueID)
     {
-        tbsGen.setSubjectUniqueID(booleanToBitString(uniqueID));
+        tbsGen.setSubjectUniqueID(CertUtils.booleanToBitString(uniqueID));
 
         return this;
     }
 
     /**
-     * Set the issuer unique ID - note: it is very rare that it is correct to do this.
+     * Set the issuerUniqueID - note: it is very rare that it is correct to do this.
+     *
+     * @param uniqueID a boolean array representing the bits making up the issuerUniqueID.
+     * @return this builder object.
      */
     public X509v3CertificateBuilder setIssuerUniqueID(boolean[] uniqueID)
     {
-        tbsGen.setIssuerUniqueID(booleanToBitString(uniqueID));
+        tbsGen.setIssuerUniqueID(CertUtils.booleanToBitString(uniqueID));
 
         return this;
     }
 
     /**
-     * add a given extension field for the standard extensions tag (tag 3)
+     * Add a given extension field for the standard extensions tag (tag 3)
+     *
+     * @param oid the OID defining the extension type.
+     * @param isCritical true if the extension is critical, false otherwise.
+     * @param value the ASN.1 structure that forms the extension's value.
+     * @return this builder object.
      */
     public X509v3CertificateBuilder addExtension(
         ASN1ObjectIdentifier oid,
-        boolean critical,
+        boolean isCritical,
         ASN1Encodable value)
     {
-        extGenerator.addExtension(oid, critical, value);
+        extGenerator.addExtension(oid, isCritical, value);
 
         return this;
     }
 
     /**
-     * add a given extension field for the standard extensions tag (tag 3)
+     * Add a given extension field for the standard extensions tag (tag 3)
      * copying the extension value from another certificate.
+     *
+     * @param oid the OID defining the extension type.
+     * @param isCritical true if the copied extension is to be marked as critical, false otherwise.
+     * @param certHolder the holder for the certificate that the extension is to be copied from.
+     * @return this builder object.
      */
     public X509v3CertificateBuilder copyAndAddExtension(
         ASN1ObjectIdentifier oid,
-        boolean critical,
+        boolean isCritical,
         X509CertificateHolder certHolder)
     {
         X509CertificateStructure cert = certHolder.toASN1Structure();
@@ -89,14 +114,17 @@ public class X509v3CertificateBuilder
             throw new NullPointerException("extension " + oid + " not present");
         }
 
-        extGenerator.addExtension(oid, critical, extension.getValue().getOctets());
+        extGenerator.addExtension(oid, isCritical, extension.getValue().getOctets());
 
         return this;
     }
 
     /**
-     * generate an X509 certificate, based on the current issuer and subject
-     * using the passed in signer
+     * Generate an X.509 certificate, based on the current issuer and subject
+     * using the passed in signer.
+     *
+     * @param signer the content signer to be used to generate the signature validating the certificate.
+     * @return a holder containing the resulting signed certificate.
      */
     public X509CertificateHolder build(
         ContentSigner signer)
@@ -109,26 +137,5 @@ public class X509v3CertificateBuilder
         }
 
         return CertUtils.generateFullCert(signer, tbsGen.generateTBSCertificate());
-    }
-
-    private DERBitString booleanToBitString(boolean[] id)
-    {
-        byte[] bytes = new byte[(id.length + 7) / 8];
-
-        for (int i = 0; i != id.length; i++)
-        {
-            bytes[i / 8] |= (id[i]) ? (1 << ((7 - (i % 8)))) : 0;
-        }
-
-        int pad = id.length % 8;
-
-        if (pad == 0)
-        {
-            return new DERBitString(bytes);
-        }
-        else
-        {
-            return new DERBitString(bytes, 8 - pad);
-        }
     }
 }

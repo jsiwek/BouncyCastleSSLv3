@@ -2,18 +2,17 @@ package org.bouncycastle.crypto.tls;
 
 import java.io.IOException;
 import java.util.Hashtable;
-import java.util.Vector;
 
-interface TlsClient
+public interface TlsClient
 {
-    void init(TlsProtocolHandler handler);
+    void init(TlsClientContext context);
 
     int[] getCipherSuites();
 
     short[] getCompressionMethods();
 
     // Hashtable is (Integer -> byte[])
-    Hashtable generateClientExtensions();
+    Hashtable getClientExtensions() throws IOException;
 
     void notifySessionID(byte[] sessionID);
 
@@ -26,14 +25,11 @@ interface TlsClient
     // Hashtable is (Integer -> byte[])
     void processServerExtensions(Hashtable serverExtensions);
 
-    TlsKeyExchange createKeyExchange() throws IOException;
+    TlsKeyExchange getKeyExchange() throws IOException;
 
-    // Vector is (X509Name)
-    void processServerCertificateRequest(short[] certificateTypes, Vector certificateAuthorities);
+    TlsAuthentication getAuthentication() throws IOException;
 
-    Certificate getCertificate();
+    TlsCompression getCompression() throws IOException;
 
-    byte[] generateCertificateSignature(byte[] md5andsha1) throws IOException;
-
-    TlsCipher createCipher(SecurityParameters securityParameters) throws IOException;
+    TlsCipher getCipher() throws IOException;
 }
