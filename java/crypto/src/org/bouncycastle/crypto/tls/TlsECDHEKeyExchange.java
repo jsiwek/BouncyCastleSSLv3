@@ -2,7 +2,6 @@ package org.bouncycastle.crypto.tls;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 import org.bouncycastle.crypto.Signer;
 import org.bouncycastle.crypto.io.SignerInputStream;
@@ -13,17 +12,11 @@ import org.bouncycastle.math.ec.ECPoint;
 /**
  * ECDHE key exchange (see RFC 4492)
  */
-class TlsECDHEKeyExchange extends TlsECKeyExchange
+class TlsECDHEKeyExchange extends TlsECDHKeyExchange
 {
-    TlsECDHEKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer,
-        short keyExchange)
+    TlsECDHEKeyExchange(TlsClientContext context, int keyExchange)
     {
-        super(handler, verifyer, keyExchange);
-    }
-
-    public void skipServerCertificate() throws IOException
-    {
-        throw new TlsFatalAlert(AlertDescription.unexpected_message);
+        super(context, keyExchange);
     }
 
     public void skipServerKeyExchange() throws IOException
@@ -31,9 +24,11 @@ class TlsECDHEKeyExchange extends TlsECKeyExchange
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
     }
 
-    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
+    public void processServerKeyExchange(InputStream is)
         throws IOException
     {
+        SecurityParameters securityParameters = context.getSecurityParameters();
+
         Signer signer = initSigner(tlsSigner, securityParameters);
         InputStream sigIn = new SignerInputStream(is, signer);
 
@@ -71,14 +66,40 @@ class TlsECDHEKeyExchange extends TlsECKeyExchange
         this.ecAgreeServerPublicKey = validateECPublicKey(new ECPublicKeyParameters(Q, curve_params));
     }
 
-    public void generateClientKeyExchange(OutputStream os) throws IOException
+    public void validateCertificateRequest(CertificateRequest certificateRequest)
+        throws IOException
     {
-        generateEphemeralClientKeyExchange(ecAgreeServerPublicKey.getParameters(), os);
+        /*
+         * RFC 4492 3. [...] The ECDSA_fixed_ECDH and RSA_fixed_ECDH mechanisms are usable
+         * with ECDH_ECDSA and ECDH_RSA. Their use with ECDHE_ECDSA and ECDHE_RSA is
+         * prohibited because the use of a long-term ECDH client key would jeopardize the
+         * forward secrecy property of these algorithms.
+         */
+        short[] types = certificateRequest.getCertificateTypes();
+        for (int i = 0; i < types.length; ++i)
+        {
+            switch (types[i])
+            {
+                case ClientCertificateType.rsa_sign:
+                case ClientCertificateType.dss_sign:
+                case ClientCertificateType.ecdsa_sign:
+                    break;
+                default:
+                    throw new TlsFatalAlert(AlertDescription.illegal_parameter);
+            }
+        }
     }
 
-    public byte[] generatePremasterSecret() throws IOException
+    public void processClientCredentials(TlsCredentials clientCredentials) throws IOException
     {
-        return calculateECDHBasicAgreement(ecAgreeServerPublicKey, ecAgreeClientPrivateKey);
+        if (clientCredentials instanceof TlsSignerCredentials)
+        {
+            // OK
+        }
+        else
+        {
+            throw new TlsFatalAlert(AlertDescription.internal_error);
+        }
     }
 
     protected Signer initSigner(TlsSigner tlsSigner, SecurityParameters securityParameters)
@@ -88,14 +109,4 @@ class TlsECDHEKeyExchange extends TlsECKeyExchange
         signer.update(securityParameters.serverRandom, 0, securityParameters.serverRandom.length);
         return signer;
     }
-
-//    public void processServerCertificateRequest(byte[] certificateTypes,
-//        Vector certificateAuthorities)
-//    {
-//    }
-//
-//    public boolean sendCertificateVerify()
-//    {
-//        return true;
-//    }
 }

@@ -21,6 +21,7 @@ import org.bouncycastle.asn1.cmp.CertConfirmContent;
 import org.bouncycastle.asn1.cmp.CertRepMessage;
 import org.bouncycastle.asn1.cmp.PKIBody;
 import org.bouncycastle.asn1.cmp.PKIMessage;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.GeneralName;
 import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.cert.CertException;
@@ -29,6 +30,7 @@ import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.cmp.CertificateConfirmationContent;
 import org.bouncycastle.cert.cmp.CertificateConfirmationContentBuilder;
 import org.bouncycastle.cert.cmp.CertificateStatus;
+import org.bouncycastle.cert.cmp.GeneralPKIMessage;
 import org.bouncycastle.cert.cmp.ProtectedPKIMessage;
 import org.bouncycastle.cert.cmp.ProtectedPKIMessageBuilder;
 import org.bouncycastle.cert.crmf.PKMACBuilder;
@@ -179,7 +181,7 @@ public class AllTests
         throws Exception
     {
         PKIMessage msg = loadMessage("sample_cr.der");
-        ProtectedPKIMessage procMsg = new ProtectedPKIMessage(msg);
+        ProtectedPKIMessage procMsg = new ProtectedPKIMessage(new GeneralPKIMessage(msg));
 
         assertTrue(procMsg.verify(new PKMACBuilder(new JcePKMACValuesCalculator().setProvider(BC)), "TopSecret1234".toCharArray()));
     }
@@ -193,11 +195,11 @@ public class AllTests
         PublicKey  issPub  = issKP.getPublic();
 
         X509v3CertificateBuilder v1CertGen = new JcaX509v3CertificateBuilder(
-            new X509Name(_issDN),
+            new X500Name(_issDN),
             BigInteger.valueOf(System.currentTimeMillis()),
             new Date(System.currentTimeMillis()),
             new Date(System.currentTimeMillis() + (1000L * 60 * 60 * 24 * 100)),
-            new X509Name(_subDN),
+            new X500Name(_subDN),
             subPub);
 
         ContentSigner signer = new JcaContentSignerBuilder("SHA1WithRSA").setProvider(BC).build(issPriv);

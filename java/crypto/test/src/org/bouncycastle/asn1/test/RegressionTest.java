@@ -19,6 +19,7 @@ public class RegressionTest
         new PKCS10Test(),
         new PKCS12Test(),
         new X509NameTest(),
+        new X500NameTest(),
         new X509ExtensionsTest(),
         new GeneralizedTimeTest(),
         new BitStringTest(),
@@ -67,7 +68,8 @@ public class RegressionTest
         new SubjectKeyIdentifierTest(),
         new ESSCertIDv2UnitTest(),
         new ParsingTest(),
-        new GeneralNameTest()
+        new GeneralNameTest(),
+        new RFC4519Test()
     };
 
     public static void main(

@@ -1,8 +1,9 @@
 package org.bouncycastle.asn1.test;
 
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
 import org.bouncycastle.util.test.SimpleTestResult;
-
-import junit.framework.*;
 
 public class AllTests
     extends TestCase

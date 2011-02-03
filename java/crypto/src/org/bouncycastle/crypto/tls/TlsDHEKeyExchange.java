@@ -2,7 +2,6 @@ package org.bouncycastle.crypto.tls;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.math.BigInteger;
 
 import org.bouncycastle.crypto.Signer;
@@ -12,9 +11,9 @@ import org.bouncycastle.crypto.params.DHPublicKeyParameters;
 
 class TlsDHEKeyExchange extends TlsDHKeyExchange
 {
-    TlsDHEKeyExchange(TlsProtocolHandler handler, CertificateVerifyer verifyer, short keyExchange)
+    TlsDHEKeyExchange(TlsClientContext context, int keyExchange)
     {
-        super(handler, verifyer, keyExchange);
+        super(context, keyExchange);
     }
 
     public void skipServerKeyExchange() throws IOException
@@ -22,9 +21,11 @@ class TlsDHEKeyExchange extends TlsDHKeyExchange
         throw new TlsFatalAlert(AlertDescription.unexpected_message);
     }
 
-    public void processServerKeyExchange(InputStream is, SecurityParameters securityParameters)
+    public void processServerKeyExchange(InputStream is)
         throws IOException
     {
+        SecurityParameters securityParameters = context.getSecurityParameters();
+
         Signer signer = initSigner(tlsSigner, securityParameters);
         InputStream sigIn = new SignerInputStream(is, signer);
 
@@ -44,11 +45,6 @@ class TlsDHEKeyExchange extends TlsDHKeyExchange
 
         this.dhAgreeServerPublicKey = validateDHPublicKey(new DHPublicKeyParameters(Ys,
             new DHParameters(p, g)));
-    }
-
-    public void generateClientKeyExchange(OutputStream os) throws IOException
-    {
-        generateEphemeralClientKeyExchange(dhAgreeServerPublicKey.getParameters(), os);
     }
 
     protected Signer initSigner(TlsSigner tlsSigner, SecurityParameters securityParameters)

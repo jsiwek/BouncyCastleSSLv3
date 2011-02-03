@@ -2,27 +2,38 @@
 #
 # Build script.
 # A successful build will place a lcrypto-${version}.jar in out/
+# Specify "test" as the first argument to this script to run tests.
 
 sourcedir="$( cd "$( dirname "$0" )" && pwd )"
 
 junitJarPath=${sourcedir}/deps/junit-4.8.2.jar
 
-CLASSPATH=${junitJarPath}:$CLASSPATH
-export CLASSPATH
+export CLASSPATH=${junitJarPath}:$CLASSPATH
 
 dottedjdk="jdk1.6"
 jdk=`echo ${dottedjdk} | sed 's/\.//'`
 buildxml=${jdk}.xml
+buildprops=java/crypto/bc-build.properties
 
-cd java/crypto
-version=`cat bc-build.properties | sed -n 's/release.suffix: //p' | cut -d . -f 2`
-jarname=lcrypto-${version}.jar
 
-ant -f ${buildxml} build-lw
+ver=`cat ${buildprops} | sed -n 's/release.suffix: //p' | cut -d . -f 2`
+lcrypto_jar=lcrypto-${ver}.jar
 
-if [ $? -eq 0 ]; then
-    cd build/artifacts/${dottedjdk}/lcrypto-${jdk}-${version}/classes
-    jar -cf ${jarname} .
-    mkdir -p ${sourcedir}/out
-    mv ${jarname} ${sourcedir}/out
+if [ "$1" != "test" ]; then
+    cd java/crypto
+
+    ant -f ${buildxml} build-lw
+
+    if [ $? -eq 0 ]; then
+        cd build/artifacts/${dottedjdk}/lcrypto-${jdk}-${ver}/classes
+        jar -cf ${lcrypto_jar} .
+        mkdir -p ${sourcedir}/out
+        mv ${lcrypto_jar} ${sourcedir}/out
+    fi
+else
+    export CLASSPATH=${sourcedir}/out/:${CLASSPATH}
+    export CLASSPATH=${sourcedir}/out/${lcrypto_jar}:${CLASSPATH}
+    javac -d out/ testing/src/*.java
+    cd testing
+    java org.junit.runner.JUnitCore BCTlsTest
 fi

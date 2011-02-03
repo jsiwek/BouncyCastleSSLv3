@@ -4,10 +4,10 @@ import java.math.BigInteger;
 import java.util.Date;
 
 import org.bouncycastle.asn1.DERInteger;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.Time;
 import org.bouncycastle.asn1.x509.V1TBSCertificateGenerator;
-import org.bouncycastle.asn1.x509.X509Name;
 import org.bouncycastle.operator.ContentSigner;
 
 
@@ -18,7 +18,17 @@ public class X509v1CertificateBuilder
 {
     private V1TBSCertificateGenerator   tbsGen;
 
-    public X509v1CertificateBuilder(X509Name issuer, BigInteger serial, Date notBefore, Date notAfter, X509Name subject, SubjectPublicKeyInfo publicKeyInfo)
+    /**
+     * Create a builder for a version 1 certificate.
+     *
+     * @param issuer the certificate issuer
+     * @param serial the certificate serial number
+     * @param notBefore the date before which the certificate is not valid
+     * @param notAfter the date after which the certificate is not valid
+     * @param subject the certificate subject
+     * @param publicKeyInfo the info structure for the public key to be associated with this certificate.
+     */
+    public X509v1CertificateBuilder(X500Name issuer, BigInteger serial, Date notBefore, Date notAfter, X500Name subject, SubjectPublicKeyInfo publicKeyInfo)
     {
         tbsGen = new V1TBSCertificateGenerator();
         tbsGen.setSerialNumber(new DERInteger(serial));
@@ -30,8 +40,11 @@ public class X509v1CertificateBuilder
     }
 
     /**
-     * generate an X509 certificate, based on the current issuer and subject
-     * using the passed in signer
+     * Generate an X509 certificate, based on the current issuer and subject
+     * using the passed in signer.
+     *
+     * @param signer the content signer to be used to generate the signature validating the certificate.
+     * @return a holder containing the resulting signed certificate.
      */
     public X509CertificateHolder build(
         ContentSigner signer)

@@ -1,5 +1,6 @@
 package org.bouncycastle.crypto.tls;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -7,12 +8,15 @@ import java.io.OutputStream;
 /**
  * An implementation of the TLS 1.0 record layer, allowing downgrade to SSLv3.
  */
+// TODO Use fixed temporary buffers (since there is a limit on the size) for input/output
 class RecordStream
 {
     private TlsProtocolHandler handler;
     private InputStream is;
     private OutputStream os;
     private byte[] handshake_messages;
+    private TlsCompression readCompression = null;
+    private TlsCompression writeCompression = null;
     private TlsCipher readCipher = null;
     private TlsCipher writeCipher = null;
 
@@ -22,17 +26,21 @@ class RecordStream
         this.is = is;
         this.os = os;
         this.handshake_messages = new byte[0];
+        this.readCompression = new TlsNullCompression();
+        this.writeCompression = this.readCompression;
         this.readCipher = new TlsNullCipher();
         this.writeCipher = this.readCipher;
     }
 
-    void clientCipherSpecDecided(TlsCipher tlsCipher)
+    void clientCipherSpecDecided(TlsCompression tlsCompression, TlsCipher tlsCipher)
     {
+        this.writeCompression = tlsCompression;
         this.writeCipher = tlsCipher;
     }
 
     void serverClientSpecReceived()
     {
+        this.readCompression = this.writeCompression;
         this.readCipher = this.writeCipher;
     }
 
@@ -52,7 +60,13 @@ class RecordStream
     {
         byte[] buf = new byte[len];
         TlsUtils.readFully(buf, is);
-        return readCipher.decodeCiphertext(type, buf, 0, buf.length);
+        byte[] decoded = readCipher.decodeCiphertext(type, buf, 0, buf.length);
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        OutputStream cOut = readCompression.decompress(bOut);
+        cOut.write(decoded, 0, decoded.length);
+        cOut.close();
+        return bOut.toByteArray();
     }
 
     protected void writeMessage(short type, byte[] message, int offset, int len) throws IOException
@@ -61,7 +75,14 @@ class RecordStream
         {
             updateHandshakeData(message, offset, len);
         }
-        byte[] ciphertext = writeCipher.encodePlaintext(type, message, offset, len);
+
+        ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+        OutputStream cOut = writeCompression.compress(bOut);
+        cOut.write(message, offset, len);
+        cOut.close();
+        byte[] compressed = bOut.toByteArray();
+
+        byte[] ciphertext = writeCipher.encodePlaintext(type, compressed, 0, compressed.length);
         byte[] writeMessage = new byte[ciphertext.length + 5];
         System.out.println("Write record type: " + type);
         TlsUtils.writeUint8(type, writeMessage, 0);

@@ -2,79 +2,29 @@ package org.bouncycastle.crypto.tls;
 
 import java.io.IOException;
 import java.util.Hashtable;
-import java.util.Vector;
 
-import org.bouncycastle.asn1.x509.X509CertificateStructure;
-import org.bouncycastle.crypto.BlockCipher;
-import org.bouncycastle.crypto.CryptoException;
-import org.bouncycastle.crypto.Digest;
-import org.bouncycastle.crypto.digests.SHA1Digest;
-import org.bouncycastle.crypto.engines.AESFastEngine;
-import org.bouncycastle.crypto.engines.DESedeEngine;
-import org.bouncycastle.crypto.modes.CBCBlockCipher;
-import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
-import org.bouncycastle.crypto.params.DSAPrivateKeyParameters;
-import org.bouncycastle.crypto.params.RSAKeyParameters;
-
-class DefaultTlsClient implements TlsClient
+public abstract class DefaultTlsClient implements TlsClient
 {
-    private CertificateVerifyer verifyer;
+    protected TlsCipherFactory cipherFactory;
 
-    private TlsProtocolHandler handler;
+    protected TlsClientContext context;
 
-    // (Optional) details for client-side authentication
-    private Certificate clientCert = new Certificate(new X509CertificateStructure[0]);
-    private AsymmetricKeyParameter clientPrivateKey = null;
-    private TlsSigner clientSigner = null;
+    protected int selectedCipherSuite;
+    protected int selectedCompressionMethod;
 
-    private int selectedCipherSuite;
-
-    DefaultTlsClient(CertificateVerifyer verifyer)
+    public DefaultTlsClient()
     {
-        this.verifyer = verifyer;
+        this(new DefaultTlsCipherFactory());
     }
 
-    void enableClientAuthentication(Certificate clientCertificate,
-        AsymmetricKeyParameter clientPrivateKey)
+    public DefaultTlsClient(TlsCipherFactory cipherFactory)
     {
-        if (clientCertificate == null)
-        {
-            throw new IllegalArgumentException("'clientCertificate' cannot be null");
-        }
-        if (clientCertificate.certs.length == 0)
-        {
-            throw new IllegalArgumentException("'clientCertificate' cannot be empty");
-        }
-        if (clientPrivateKey == null)
-        {
-            throw new IllegalArgumentException("'clientPrivateKey' cannot be null");
-        }
-        if (!clientPrivateKey.isPrivate())
-        {
-            throw new IllegalArgumentException("'clientPrivateKey' must be private");
-        }
-
-        if (clientPrivateKey instanceof RSAKeyParameters)
-        {
-            clientSigner = new TlsRSASigner();
-        }
-        else if (clientPrivateKey instanceof DSAPrivateKeyParameters)
-        {
-            clientSigner = new TlsDSSSigner();
-        }
-        else
-        {
-            throw new IllegalArgumentException("'clientPrivateKey' type not supported: "
-                + clientPrivateKey.getClass().getName());
-        }
-
-        this.clientCert = clientCertificate;
-        this.clientPrivateKey = clientPrivateKey;
+        this.cipherFactory = cipherFactory;
     }
 
-    public void init(TlsProtocolHandler handler)
+    public void init(TlsClientContext context)
     {
-        this.handler = handler;
+        this.context = context;
     }
 
     public int[] getCipherSuites()
@@ -89,35 +39,11 @@ class DefaultTlsClient implements TlsClient
             CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA,
             CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA,
             CipherSuite.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
-
-//            CipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA,
-//            CipherSuite.TLS_DH_DSS_WITH_AES_256_CBC_SHA,
-//            CipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA,
-//            CipherSuite.TLS_DH_DSS_WITH_AES_128_CBC_SHA,
-//            CipherSuite.TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA,
-//            CipherSuite.TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA,
-
-//            CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_WITH_AES_256_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_WITH_AES_128_CBC_SHA,
-//            CipherSuite.TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA,
         };
     }
 
-    public Hashtable generateClientExtensions()
+    public Hashtable getClientExtensions()
     {
-        // TODO[SRP]
-//        Hashtable clientExtensions = new Hashtable();
-//        ByteArrayOutputStream srpData = new ByteArrayOutputStream();
-//        TlsUtils.writeOpaque8(SRP_identity, srpData);
-//
-//        clientExtensions.put(Integer.valueOf(ExtensionType.srp), srpData.toByteArray());
-//        return clientExtensions;
         return null;
     }
 
@@ -138,7 +64,7 @@ class DefaultTlsClient implements TlsClient
 
     public void notifySelectedCompressionMethod(short selectedCompressionMethod)
     {
-        // TODO Store and use
+        this.selectedCompressionMethod = selectedCompressionMethod;
     }
 
     public void notifySecureRenegotiation(boolean secureRenegotiation) throws IOException
@@ -151,17 +77,15 @@ class DefaultTlsClient implements TlsClient
              * some clients may want to terminate the handshake instead of continuing; see
              * Section 4.1 for discussion.
              */
-//            handler.failWithError(AlertLevel.fatal, AlertDescription.handshake_failure);
+//            throw new TlsFatalAlert(AlertDescription.handshake_failure);
         }
     }
 
     public void processServerExtensions(Hashtable serverExtensions)
     {
-        // TODO Validate/process serverExtensions (via client?)
-        // TODO[SRP]
     }
 
-    public TlsKeyExchange createKeyExchange() throws IOException
+    public TlsKeyExchange getKeyExchange() throws IOException
     {
         switch (selectedCipherSuite)
         {
@@ -173,57 +97,42 @@ class DefaultTlsClient implements TlsClient
             case CipherSuite.TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_DH_DSS_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_DH_DSS_WITH_AES_256_CBC_SHA:
-                return createDHKeyExchange(TlsKeyExchange.KE_DH_DSS);
+                return createDHKeyExchange(KeyExchangeAlgorithm.DH_DSS);
 
             case CipherSuite.TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA:
-                return createDHKeyExchange(TlsKeyExchange.KE_DH_RSA);
+                return createDHKeyExchange(KeyExchangeAlgorithm.DH_RSA);
 
             case CipherSuite.TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_DHE_DSS_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_DHE_DSS_WITH_AES_256_CBC_SHA:
-                return createDHEKeyExchange(TlsKeyExchange.KE_DHE_DSS);
+                return createDHEKeyExchange(KeyExchangeAlgorithm.DHE_DSS);
 
             case CipherSuite.TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_DHE_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_DHE_RSA_WITH_AES_256_CBC_SHA:
-                return createDHEKeyExchange(TlsKeyExchange.KE_DHE_RSA);
+                return createDHEKeyExchange(KeyExchangeAlgorithm.DHE_RSA);
 
             case CipherSuite.TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA:
-                return createECDHKeyExchange(TlsKeyExchange.KE_ECDH_ECDSA);
+                return createECDHKeyExchange(KeyExchangeAlgorithm.ECDH_ECDSA);
 
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
-                return createECDHEKeyExchange(TlsKeyExchange.KE_ECDHE_ECDSA);
+                return createECDHEKeyExchange(KeyExchangeAlgorithm.ECDHE_ECDSA);
 
             case CipherSuite.TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA:
-                return createECDHKeyExchange(TlsKeyExchange.KE_ECDH_RSA);
+                return createECDHKeyExchange(KeyExchangeAlgorithm.ECDH_RSA);
 
             case CipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
-                return createECDHEKeyExchange(TlsKeyExchange.KE_ECDHE_RSA);
-
-            case CipherSuite.TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_WITH_AES_256_CBC_SHA:
-                return createSRPKeyExchange(TlsKeyExchange.KE_SRP);
-
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA:
-                return createSRPKeyExchange(TlsKeyExchange.KE_SRP_RSA);
-
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA:
-                return createSRPKeyExchange(TlsKeyExchange.KE_SRP_DSS);
+                return createECDHEKeyExchange(KeyExchangeAlgorithm.ECDHE_RSA);
 
             default:
                 /*
@@ -236,37 +145,28 @@ class DefaultTlsClient implements TlsClient
         }
     }
 
-    public void processServerCertificateRequest(short[] certificateTypes,
-        Vector certificateAuthorities)
+    public TlsCompression getCompression() throws IOException
     {
-        // TODO There shouldn't be a certificate request for SRP 
-
-        // TODO Use provided info to choose a certificate in getCertificate()
-    }
-
-    public Certificate getCertificate()
-    {
-        return clientCert;
-    }
-
-    public byte[] generateCertificateSignature(byte[] md5andsha1) throws IOException
-    {
-        if (clientSigner == null)
+        switch (selectedCompressionMethod)
         {
-            return null;
-        }
+            case CompressionMethod.NULL:
+                return new TlsNullCompression();
 
-        try
-        {
-            return clientSigner.calculateRawSignature(clientPrivateKey, md5andsha1);
-        }
-        catch (CryptoException e)
-        {
-            throw new TlsFatalAlert(AlertDescription.internal_error);
+            case CompressionMethod.DEFLATE:
+                return new TlsDeflateCompression();
+
+            default:
+                /*
+                 * Note: internal error here; the TlsProtocolHandler verifies that the
+                 * server-selected compression method was in the list of client-offered compression
+                 * methods, so if we now can't produce an implementation, we shouldn't have
+                 * offered it!
+                 */
+                throw new TlsFatalAlert(AlertDescription.internal_error);
         }
     }
 
-    public TlsCipher createCipher(SecurityParameters securityParameters) throws IOException
+    public TlsCipher getCipher() throws IOException
     {
         switch (selectedCipherSuite)
         {
@@ -279,10 +179,7 @@ class DefaultTlsClient implements TlsClient
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA:
             case CipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_3DES_EDE_CBC_SHA:
-                return createDESedeCipher(24, securityParameters);
+                return cipherFactory.createCipher(context, EncryptionAlgorithm._3DES_EDE_CBC, DigestAlgorithm.SHA);
 
             case CipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_DH_DSS_WITH_AES_128_CBC_SHA:
@@ -293,10 +190,7 @@ class DefaultTlsClient implements TlsClient
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA:
             case CipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_128_CBC_SHA:
-                return createAESCipher(16, securityParameters);
+                return cipherFactory.createCipher(context, EncryptionAlgorithm.AES_128_CBC, DigestAlgorithm.SHA);
 
             case CipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA:
             case CipherSuite.TLS_DH_DSS_WITH_AES_256_CBC_SHA:
@@ -307,10 +201,7 @@ class DefaultTlsClient implements TlsClient
             case CipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA:
             case CipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA:
             case CipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_WITH_AES_256_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA:
-            case CipherSuite.TLS_SRP_SHA_DSS_WITH_AES_256_CBC_SHA:
-                return createAESCipher(32, securityParameters);
+                return cipherFactory.createCipher(context, EncryptionAlgorithm.AES_256_CBC, DigestAlgorithm.SHA);
 
             default:
                 /*
@@ -323,60 +214,28 @@ class DefaultTlsClient implements TlsClient
         }
     }
 
-    protected TlsKeyExchange createDHKeyExchange(short keyExchange)
+    protected TlsKeyExchange createDHKeyExchange(int keyExchange)
     {
-        return new TlsDHKeyExchange(handler, verifyer, keyExchange);
+        return new TlsDHKeyExchange(context, keyExchange);
     }
 
-    protected TlsKeyExchange createDHEKeyExchange(short keyExchange)
+    protected TlsKeyExchange createDHEKeyExchange(int keyExchange)
     {
-        return new TlsDHEKeyExchange(handler, verifyer, keyExchange);
+        return new TlsDHEKeyExchange(context, keyExchange);
     }
 
-    protected TlsKeyExchange createECDHKeyExchange(short keyExchange)
+    protected TlsKeyExchange createECDHKeyExchange(int keyExchange)
     {
-        return new TlsECDHKeyExchange(handler, verifyer, keyExchange);
+        return new TlsECDHKeyExchange(context, keyExchange);
     }
 
-    protected TlsKeyExchange createECDHEKeyExchange(short keyExchange)
+    protected TlsKeyExchange createECDHEKeyExchange(int keyExchange)
     {
-        return new TlsECDHEKeyExchange(handler, verifyer, keyExchange);
+        return new TlsECDHEKeyExchange(context, keyExchange);
     }
 
     protected TlsKeyExchange createRSAKeyExchange()
     {
-        return new TlsRSAKeyExchange(handler, verifyer);
-    }
-
-    protected TlsKeyExchange createSRPKeyExchange(short keyExchange)
-    {
-        return new TlsSRPKeyExchange(handler, verifyer, keyExchange);
-    }
-
-    protected TlsCipher createAESCipher(int cipherKeySize, SecurityParameters securityParameters)
-    {
-        return new TlsBlockCipher(handler, createAESBlockCipher(), createAESBlockCipher(),
-            createSHA1Digest(), createSHA1Digest(), cipherKeySize, securityParameters);
-    }
-
-    protected TlsCipher createDESedeCipher(int cipherKeySize, SecurityParameters securityParameters)
-    {
-        return new TlsBlockCipher(handler, createDESedeBlockCipher(), createDESedeBlockCipher(),
-            createSHA1Digest(), createSHA1Digest(), cipherKeySize, securityParameters);
-    }
-
-    protected BlockCipher createAESBlockCipher()
-    {
-        return new CBCBlockCipher(new AESFastEngine());
-    }
-
-    protected BlockCipher createDESedeBlockCipher()
-    {
-        return new CBCBlockCipher(new DESedeEngine());
-    }
-    
-    protected Digest createSHA1Digest()
-    {
-        return new SHA1Digest();
+        return new TlsRSAKeyExchange(context);
     }
 }

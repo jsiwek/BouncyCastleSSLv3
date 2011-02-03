@@ -15,19 +15,18 @@ import org.bouncycastle.util.Arrays;
  */
 public class TlsBlockCipher implements TlsCipher
 {
-    private TlsProtocolHandler handler;
+    protected TlsClientContext context;
 
-    private BlockCipher encryptCipher;
-    private BlockCipher decryptCipher;
+    protected BlockCipher encryptCipher;
+    protected BlockCipher decryptCipher;
 
-    private TlsMac writeMac;
-    private TlsMac readMac;
+    protected TlsMac writeMac;
+    protected TlsMac readMac;
 
-    TlsBlockCipher(TlsProtocolHandler handler, BlockCipher encryptCipher,
-        BlockCipher decryptCipher, Digest writeDigest, Digest readDigest, int cipherKeySize,
-        SecurityParameters securityParameters)
+    public TlsBlockCipher(TlsClientContext context, BlockCipher encryptCipher,
+        BlockCipher decryptCipher, Digest writeDigest, Digest readDigest, int cipherKeySize)
     {
-        this.handler = handler;
+        this.context = context;
         this.encryptCipher = encryptCipher;
         this.decryptCipher = decryptCipher;
 
@@ -35,8 +34,9 @@ public class TlsBlockCipher implements TlsCipher
             + readDigest.getDigestSize() + encryptCipher.getBlockSize()
             + decryptCipher.getBlockSize();
 
+        SecurityParameters securityParameters = context.getSecurityParameters();
         byte[] key_block = TlsUtils.calculateKeyBlock(
-                handler.getNegotiatedVersion() == TlsProtocolVersion.SSLv3,
+                context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3,
                 prfSize,
                 securityParameters.masterSecret,
                 securityParameters.clientRandom,
@@ -45,9 +45,9 @@ public class TlsBlockCipher implements TlsCipher
         int offset = 0;
 
         // Init MACs
-        writeMac = new TlsMac(handler, writeDigest, key_block, offset, writeDigest.getDigestSize());
+        writeMac = new TlsMac(context, writeDigest, key_block, offset, writeDigest.getDigestSize());
         offset += writeDigest.getDigestSize();
-        readMac = new TlsMac(handler, readDigest, key_block, offset, readDigest.getDigestSize());
+        readMac = new TlsMac(context, readDigest, key_block, offset, readDigest.getDigestSize());
         offset += readDigest.getDigestSize();
 
         /*
@@ -85,10 +85,10 @@ public class TlsBlockCipher implements TlsCipher
         int minPaddingSize = blocksize - ((len + writeMac.getSize() + 1) % blocksize);
         int maxExtraPadBlocks = (255 - minPaddingSize) / blocksize;
         int actualExtraPadBlocks;
-        if (handler.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
+        if (context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
             actualExtraPadBlocks = 0;
         } else {
-            actualExtraPadBlocks = chooseExtraPadBlocks(handler.getRandom(), maxExtraPadBlocks);
+            actualExtraPadBlocks = chooseExtraPadBlocks(context.getSecureRandom(), maxExtraPadBlocks);
         }
         int paddingsize = minPaddingSize + (actualExtraPadBlocks * blocksize);
         System.out.println("Pad size: " + paddingsize);
@@ -162,7 +162,7 @@ public class TlsBlockCipher implements TlsCipher
             decrypterror = true;
             paddingsize = 0;
         }
-        else if (handler.getNegotiatedVersion() != TlsProtocolVersion.SSLv3)
+        else if (context.getNegotiatedVersion() != TlsProtocolVersion.SSLv3)
         {
             /*
              * Now, check all the padding-bytes (constant-time comparison).

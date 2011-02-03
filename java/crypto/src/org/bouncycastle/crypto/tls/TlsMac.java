@@ -1,13 +1,13 @@
 package org.bouncycastle.crypto.tls;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.Mac;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.macs.SSL3HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 
 /**
  * A generic TLS/SSLv3 MAC implementation, which can be used with any kind of
@@ -15,23 +15,23 @@ import java.io.IOException;
  */
 public class TlsMac
 {
-    private long seqNo;
-    private Mac mac;
-    TlsProtocolHandler handler;
+    TlsClientContext context;
+    protected long seqNo;
+    protected Mac mac;
 
     /**
      * Generate a new instance of an TlsMac.
      *
-     * @param handler the TLS protocol implementation
+     * @param context the TLS client context
      * @param digest The digest to use.
      * @param key_block A byte-array where the key for this mac is located.
      * @param offset The number of bytes to skip, before the key starts in the buffer.
      * @param len The length of the key.
      */
-    protected TlsMac(TlsProtocolHandler handler, Digest digest, byte[] key_block, int offset, int len)
+    public TlsMac(TlsClientContext context, Digest digest, byte[] key_block, int offset, int len)
     {
-        this.handler = handler;
-        if (handler.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
+        this.context = context;
+        if (context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
             this.mac = new SSL3HMac(digest);
         } else {
             this.mac = new HMac(digest);
@@ -44,7 +44,7 @@ public class TlsMac
     /**
      * @return The Keysize of the mac.
      */
-    protected int getSize()
+    public int getSize()
     {
         return mac.getMacSize();
     }
@@ -60,10 +60,10 @@ public class TlsMac
      * @param len The length of the message.
      * @return A new byte-buffer containing the mac value.
      */
-    protected byte[] calculateMac(short type, byte[] message, int offset, int len)
+    public byte[] calculateMac(short type, byte[] message, int offset, int len)
     {
         ByteArrayOutputStream bosMac;
-        if (handler.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
+        if (context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
             // SSLv3 does not include the protocol version
             bosMac = new ByteArrayOutputStream(11);
         } else {
@@ -73,8 +73,8 @@ public class TlsMac
         {
             TlsUtils.writeUint64(seqNo++, bosMac);
             TlsUtils.writeUint8(type, bosMac);
-            if (handler.getNegotiatedVersion() != TlsProtocolVersion.SSLv3) {
-                handler.writeVersion(bosMac);
+            if (context.getNegotiatedVersion() != TlsProtocolVersion.SSLv3) {
+                context.writeVersion(bosMac);
             }
             TlsUtils.writeUint16(len, bosMac);
         }
@@ -92,5 +92,4 @@ public class TlsMac
         mac.doFinal(result, 0);
         return result;
     }
-
 }

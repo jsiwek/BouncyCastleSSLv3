@@ -5,6 +5,8 @@ import org.bouncycastle.asn1.x509.X509CertificateStructure;
 /**
  * This should be implemented by any class which can find out, if a given certificate
  * chain is being accepted by an client.
+ * 
+ * @deprecated Perform certificate verification in TlsAuthentication implementation
  */
 public interface CertificateVerifyer
 {

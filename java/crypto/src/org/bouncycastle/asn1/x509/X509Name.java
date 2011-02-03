@@ -19,6 +19,7 @@ import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERString;
 import org.bouncycastle.asn1.DERUniversalString;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -32,6 +33,7 @@ import org.bouncycastle.util.encoders.Hex;
  *                                   type  OBJECT IDENTIFIER,
  *                                   value ANY }
  * </pre>
+ * @deprecated use org.bouncycastle.asn1.x500.X500Name.
  */
 public class X509Name
     extends ASN1Encodable
@@ -370,6 +372,10 @@ public class X509Name
         {
             return (X509Name)obj;
         }
+        else if (obj instanceof X500Name)
+        {
+            return new X509Name(ASN1Sequence.getInstance(((X500Name)obj).getDERObject()));
+        }
         else if (obj != null)
         {
             return new X509Name(ASN1Sequence.getInstance(obj));
@@ -396,7 +402,7 @@ public class X509Name
 
         while (e.hasMoreElements())
         {
-            ASN1Set         set = ASN1Set.getInstance(e.nextElement());
+            ASN1Set         set = ASN1Set.getInstance(((DEREncodable)e.nextElement()).getDERObject());
 
             for (int i = 0; i < set.size(); i++) 
             {
@@ -941,6 +947,7 @@ public class X509Name
             value = canonicalize(value);
             value = stripInternalSpaces(value);
 
+            hashCodeValue ^= ordering.elementAt(i).hashCode();
             hashCodeValue ^= value.hashCode();
         }
 

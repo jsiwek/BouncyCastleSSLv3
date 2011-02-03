@@ -12,6 +12,7 @@ import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.RecipientOperator;
 import org.bouncycastle.jcajce.io.MacOutputStream;
+import org.bouncycastle.operator.GenericKey;
 import org.bouncycastle.operator.MacCalculator;
 
 public class JceKeyAgreeAuthenticatedRecipient
@@ -25,15 +26,20 @@ public class JceKeyAgreeAuthenticatedRecipient
     public RecipientOperator getRecipientOperator(AlgorithmIdentifier keyEncryptionAlgorithm, final AlgorithmIdentifier contentMacAlgorithm, SubjectPublicKeyInfo senderPublicKey, ASN1OctetString userKeyingMaterial, byte[] encryptedContentKey)
         throws CMSException
     {
-        Key secretKey = extractSecretKey(keyEncryptionAlgorithm, contentMacAlgorithm, senderPublicKey, userKeyingMaterial, encryptedContentKey);
+        final Key secretKey = extractSecretKey(keyEncryptionAlgorithm, contentMacAlgorithm, senderPublicKey, userKeyingMaterial, encryptedContentKey);
 
-        final Mac dataMac = helper.createContentMac(secretKey, contentMacAlgorithm);
+        final Mac dataMac = contentHelper.createContentMac(secretKey, contentMacAlgorithm);
 
         return new RecipientOperator(new MacCalculator()
         {
             public AlgorithmIdentifier getAlgorithmIdentifier()
             {
                 return contentMacAlgorithm;
+            }
+
+            public GenericKey getKey()
+            {
+                return new GenericKey(secretKey);
             }
 
             public OutputStream getOutputStream()

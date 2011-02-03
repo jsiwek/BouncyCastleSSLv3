@@ -23,9 +23,9 @@ import java.util.Set;
 
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OutputStream;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.ocsp.OCSPRequest;
 import org.bouncycastle.asn1.ocsp.Request;
 import org.bouncycastle.asn1.x509.GeneralName;
@@ -365,7 +365,7 @@ public class OCSPReq
     
             while (e.hasMoreElements())
             {
-                DERObjectIdentifier oid = (DERObjectIdentifier)e.nextElement();
+                ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier)e.nextElement();
                 X509Extension       ext = extensions.getExtension(oid);
     
                 if (critical == ext.isCritical())
@@ -394,7 +394,7 @@ public class OCSPReq
 
         if (exts != null)
         {
-            X509Extension   ext = exts.getExtension(new DERObjectIdentifier(oid));
+            X509Extension   ext = exts.getExtension(new ASN1ObjectIdentifier(oid));
 
             if (ext != null)
             {

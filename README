@@ -1,12 +1,3 @@
 # BouncyCastle was checked out like:
 export CVSROOT=:pserver:anonymous@cvs.bouncycastle.org:/home/users/bouncy/cvsroot
 cvs co java
-cd java
-cvs -q update -D '2010-11-21'
-
-
-
-# GSS reminders
-TlsBlockCipher needs getters for write/read MAC
-TlsMac needs to preserve the secret key from the key_block
-TlsMac needs a getter for the secret and seqNo (also way to increment seqNo)

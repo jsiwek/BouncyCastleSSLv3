@@ -31,6 +31,7 @@ import org.bouncycastle.asn1.cms.CMSAttributes;
 import org.bouncycastle.asn1.cms.ContentInfo;
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.cert.X509AttributeCertificateHolder;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.jcajce.JcaCRLStore;
@@ -56,12 +57,13 @@ import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
 import org.bouncycastle.crypto.util.PrivateKeyFactory;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DigestCalculatorProvider;
 import org.bouncycastle.operator.bc.BcContentSignerBuilder;
-import org.bouncycastle.operator.bc.BcContentVerifierProviderBuilder;
 import org.bouncycastle.operator.bc.BcDigestCalculatorProvider;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
+import org.bouncycastle.operator.bc.BcRSAContentVerifierProviderBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
@@ -484,7 +486,7 @@ public class NewSignedDataTest
             Iterator        certIt = certCollection.iterator();
             X509CertificateHolder cert = (X509CertificateHolder)certIt.next();
 
-            assertEquals(true, signer.verify(new BcContentVerifierProviderBuilder().build(cert)));
+            assertEquals(true, signer.verify(new BcRSAContentVerifierProviderBuilder(new DefaultDigestAlgorithmIdentifierFinder()).build(cert)));
 
             if (contentDigest != null)
             {
@@ -692,7 +694,11 @@ public class NewSignedDataTest
         CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
         ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(_origKP.getPrivate());
 
-        gen.addSignerInfoGenerator(new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build()).setDirectSignature(true).build(sha1Signer, _origCert));
+        JcaSignerInfoGeneratorBuilder builder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
+
+        builder.setDirectSignature(true);
+
+        gen.addSignerInfoGenerator(builder.build(sha1Signer, _origCert));
     
         gen.addCertificates(certs);
     
@@ -855,7 +861,10 @@ public class NewSignedDataTest
 
         v.add(attr);
 
-        JcaSignerInfoGeneratorBuilder builder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build()).setSignedAttributeGenerator(new DefaultSignedAttributeTableGenerator(new AttributeTable(v)));
+        JcaSignerInfoGeneratorBuilder builder = new JcaSignerInfoGeneratorBuilder(new JcaDigestCalculatorProviderBuilder().setProvider(BC).build());
+
+        builder.setSignedAttributeGenerator(new DefaultSignedAttributeTableGenerator(new AttributeTable(v)));
+        
         ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider(BC).build(_origKP.getPrivate());
 
         gen.addSignerInfoGenerator(builder.build(sha1Signer, _origCert));
@@ -900,7 +909,11 @@ public class NewSignedDataTest
         v.add(attr);
 
         AsymmetricKeyParameter privKey = PrivateKeyFactory.createKey(_origKP.getPrivate().getEncoded());
-        BcContentSignerBuilder contentSignerBuilder = new BcRSAContentSignerBuilder(new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA"));
+        
+        AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find("SHA1withRSA");
+        AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+
+        BcContentSignerBuilder contentSignerBuilder = new BcRSAContentSignerBuilder(sigAlgId, digAlgId);
 
         gen.addSignerInfoGenerator(
             new SignerInfoGeneratorBuilder(new BcDigestCalculatorProvider())
