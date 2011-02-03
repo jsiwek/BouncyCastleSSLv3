@@ -322,10 +322,10 @@ public class TlsUtils
         return rval;
     }
 
-    protected static byte[] getCertVerify(boolean sslv3, byte[] secret,
+    protected static byte[] getCertVerify(TlsProtocolVersion p, byte[] secret,
                                           byte[] handshake_messages)
             throws IOException {
-        if (sslv3) {
+        if (p == TlsProtocolVersion.SSLv3) {
             try {
                 return getSSLHandshakeHash(null, secret, handshake_messages);
             } catch (Exception e) {
@@ -341,12 +341,12 @@ public class TlsUtils
         }
     }
 
-    protected static byte[] getFinishedMsg(boolean sslv3, byte[] secret,
+    protected static byte[] getFinishedMsg(TlsProtocolVersion p, byte[] secret,
                                         byte[] handshake_messages, String msg,
                                         byte[] sender)
             throws IOException {
         byte[] verifyData;
-        if (sslv3) {
+        if (p == TlsProtocolVersion.SSLv3) {
             try {
                 verifyData = getSSLHandshakeHash(sender,
                         secret, handshake_messages);
@@ -366,12 +366,12 @@ public class TlsUtils
         return verifyData;
     }
 
-    protected static byte[] calculateMasterSecret(boolean sslv3,
+    protected static byte[] calculateMasterSecret(TlsProtocolVersion p,
                                                   byte[] pre_master_secret,
                                                   byte[] client_random,
                                                   byte[] server_random)
             throws IOException {
-        if (sslv3) {
+        if (p == TlsProtocolVersion.SSLv3) {
             try {
                 MessageDigest md5 = MessageDigest.getInstance("MD5");
                 MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
@@ -396,11 +396,11 @@ public class TlsUtils
         }
     }
 
-    protected static byte[] calculateKeyBlock(boolean sslv3, int prfSize,
+    protected static byte[] calculateKeyBlock(TlsProtocolVersion p, int prfSize,
                                                byte[] master_secret,
                                                byte[] client_random,
                                                byte[] server_random) {
-        if (sslv3) {
+        if (p == TlsProtocolVersion.SSLv3) {
             try {
                 int i = 0;
                 byte tmp[] = new byte[0];

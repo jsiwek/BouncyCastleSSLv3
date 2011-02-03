@@ -36,7 +36,7 @@ public class TlsBlockCipher implements TlsCipher
 
         SecurityParameters securityParameters = context.getSecurityParameters();
         byte[] key_block = TlsUtils.calculateKeyBlock(
-                context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3,
+                context.getNegotiatedVersion(),
                 prfSize,
                 securityParameters.masterSecret,
                 securityParameters.clientRandom,

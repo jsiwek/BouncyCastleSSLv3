@@ -263,7 +263,7 @@ public class TlsProtocolHandler
                          */
                         byte[] expectedServerVerifyData =
                                 TlsUtils.getFinishedMsg(
-                                        negotiatedVersion == TlsProtocolVersion.SSLv3,
+                                        negotiatedVersion,
                                         securityParameters.masterSecret,
                                         rs.getHandshakeMessages(),
                                         "server finished", TlsUtils.SSL_SERVER);
@@ -522,7 +522,7 @@ public class TlsProtocolHandler
 
                         securityParameters.masterSecret =
                                 TlsUtils.calculateMasterSecret(
-                                        negotiatedVersion == TlsProtocolVersion.SSLv3,
+                                        negotiatedVersion,
                                         pms,
                                         securityParameters.clientRandom,
                                         securityParameters.serverRandom);
@@ -542,7 +542,7 @@ public class TlsProtocolHandler
                             TlsSignerCredentials signerCreds = (TlsSignerCredentials)clientCreds;
                             byte[] clientCertificateSignature = signerCreds.generateCertificateSignature(
                                 TlsUtils.getCertVerify(
-                                    negotiatedVersion == TlsProtocolVersion.SSLv3,
+                                    negotiatedVersion,
                                     securityParameters.masterSecret,
                                     rs.getHandshakeMessages()));
                             sendCertificateVerify(clientCertificateSignature);
@@ -570,7 +570,7 @@ public class TlsProtocolHandler
                          * Send our finished message.
                          */
                         byte[] clientVerifyData = TlsUtils.getFinishedMsg(
-                                negotiatedVersion == TlsProtocolVersion.SSLv3,
+                                negotiatedVersion,
                                 securityParameters.masterSecret,
                                 rs.getHandshakeMessages(),
                                 "client finished", TlsUtils.SSL_CLIENT);
