@@ -1,15 +1,31 @@
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
+import org.bouncycastle.asn1.ASN1InputStream;
+import org.bouncycastle.asn1.DERObject;
+import org.bouncycastle.asn1.x509.X509CertificateStructure;
+import org.bouncycastle.crypto.tls.AlertDescription;
 import org.bouncycastle.crypto.tls.AlwaysValidVerifyer;
+import org.bouncycastle.crypto.tls.Certificate;
+import org.bouncycastle.crypto.tls.CertificateRequest;
+import org.bouncycastle.crypto.tls.CertificateVerifyer;
+import org.bouncycastle.crypto.tls.DefaultTlsClient;
+import org.bouncycastle.crypto.tls.TlsAuthentication;
+import org.bouncycastle.crypto.tls.TlsCredentials;
+import org.bouncycastle.crypto.tls.TlsFatalAlert;
 import org.bouncycastle.crypto.tls.TlsProtocolHandler;
+import org.bouncycastle.crypto.tls.TlsSignerCredentials;
 import org.bouncycastle.util.Arrays;
 
+import javax.crypto.Cipher;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.LinkedList;
-import java.util.List;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 
 /**
  * Tests for different combinations of SSL/TLS client/server configurations
@@ -25,6 +41,13 @@ public class BCTlsTest extends TestCase {
     private static final int OPENSSL_TEST_PORT = 10001;
     private static final byte[] MSG = "hello world".getBytes();
 
+    private static final String KEYSTORE_FILE = "keystore.ImportKey";
+    private static final char[] KEYSTORE_PASS = "importkey".toCharArray();
+    private static final String KEYSTORE_TYPE = "JKS";
+
+    private static final String[][] protoVariations = {TLSv1, SSLv3, BOTH};
+    private static final boolean[] clientAuthVariations = {false, true};
+
     /**
      * JSSE client to JSSE server tests
      * TLSv1, SSLv3 and downgrading TLSv1->SSLv3 are tested with and without
@@ -32,13 +55,8 @@ public class BCTlsTest extends TestCase {
      * @throws Exception when tests fail to run
      */
     public void testJSSEtoJSSEConnections() throws Exception {
-        List<String[]> protoVariations = new LinkedList<String[]>();
-        protoVariations.add(TLSv1);
-        protoVariations.add(SSLv3);
-        protoVariations.add(BOTH);
-
         for (String[] p : protoVariations) {
-            for (boolean ca : new boolean[] {true, false}) {
+            for (boolean ca : clientAuthVariations) {
                 SSLConnectionServer server = new SSLConnectionServer(p, ca);
                 JSSEServerThread st = new JSSEServerThread(server, JSSE_TEST_PORT);
                 st.start();
@@ -48,7 +66,7 @@ public class BCTlsTest extends TestCase {
         }
 
         // Test client causing downgrade from TLSv1 to SSLv3
-        for (boolean ca: new boolean[] {true, false}) {
+        for (boolean ca: clientAuthVariations) {
             SSLConnectionServer server = new SSLConnectionServer(BOTH, ca);
             JSSEServerThread st = new JSSEServerThread(server, JSSE_TEST_PORT);
             st.start();
@@ -86,18 +104,24 @@ public class BCTlsTest extends TestCase {
 
     /**
      * BouncyCastle client to JSSE server tests
-     * TODO: test different combinations of SSL & TLS versions and client auth
+     * TODO: test different protocol variations
      * @throws Exception when the tests fail to run
      */
     public void testBCtoJSSEConnections() throws Exception {
-        SSLConnectionServer server = new SSLConnectionServer(BOTH, false);
-        JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
-        st.start();
-        Thread.yield();
+        String[][] protoVariations = {BOTH};
 
-        byte[] recv = BCClientConnect(BOTH, BC_TEST_PORT, MSG);
+        for (String[] p : protoVariations) {
+            for (boolean ca : clientAuthVariations) {
+                SSLConnectionServer server = new SSLConnectionServer(p, ca);
+                JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
+                st.start();
+                Thread.yield();
 
-        assertTrue(Arrays.areEqual(MSG, recv));
+                byte[] recv = BCClientConnect(p, BC_TEST_PORT, MSG);
+
+                assertTrue(Arrays.areEqual(MSG, recv));
+            }
+        }
     }
 
     /**
@@ -110,8 +134,6 @@ public class BCTlsTest extends TestCase {
      */
     public byte[] BCClientConnect(String[] protos, int port, byte[] sendMsg)
             throws Exception {
-        AlwaysValidVerifyer verifier = new AlwaysValidVerifyer();
-
         Socket s = null;
         for (int i = 0; i < 3; ++i) {
             Thread.sleep(1000 * i);
@@ -131,7 +153,7 @@ public class BCTlsTest extends TestCase {
         TlsProtocolHandler handler = new TlsProtocolHandler(
                 s.getInputStream(),
                 s.getOutputStream());
-        handler.connect(verifier);
+        handler.connect(new TestTlsClient());
         InputStream is = handler.getInputStream();
         OutputStream os = handler.getOutputStream();
         os.write(sendMsg);
@@ -164,30 +186,30 @@ public class BCTlsTest extends TestCase {
      * It's expected that a file called "helloworld" exist in the working
      * directory that contains data that the server is will return to
      * connected clients.
-     * TODO: test different combinations of SSL & TLS versions and client auth
+     * TODO: test different combinations of SSL & TLS versions
      * @throws Exception when the tests fail to run
      */
     public void testBCtoOpenSSLConnections() throws Exception {
-        Process server = startOpenSSLServer(OPENSSL_TEST_PORT, false, BOTH);
+        String[][] protoVariations = {BOTH};
 
-        try {
-            Thread.sleep(1000);
-            int exitVal = server.exitValue();
-            System.err.println("OpenSSL server exited with status " + exitVal);
-            InputStream err = server.getErrorStream();
-            byte[] errBytes = new byte[err.available()];
-            err.read(errBytes, 0, errBytes.length);
-            System.err.println(new String(errBytes));
-        } catch (IllegalThreadStateException e) {
-            // This is expected (the server should not have exited yet)
+        for (String[] p : protoVariations) {
+            for (boolean ca : clientAuthVariations) {
+                Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, p);
+
+                String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
+                try {
+                    byte[] recv = BCClientConnect(p, OPENSSL_TEST_PORT,
+                                                  msg.getBytes());
+
+                    String recvMsg = new String(recv);
+                    assertTrue(recvMsg.contains(new String(MSG)));
+                } catch (Exception e) {
+                    throw e;
+                } finally {
+                    server.destroy();
+                }
+            }
         }
-
-        String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
-        byte[] recv = BCClientConnect(BOTH, OPENSSL_TEST_PORT, msg.getBytes());
-
-        String recvMsg = new String(recv);
-        assertTrue(recvMsg.contains(new String(MSG)));
-        server.destroy();
     }
 
     /**
@@ -216,7 +238,25 @@ public class BCTlsTest extends TestCase {
             command += " -tls1";
         }
 
-        return Runtime.getRuntime().exec(command);
+        Process server = Runtime.getRuntime().exec(command);
+
+        // Check whether the server prematurely exited
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {}
+
+        try {
+            int exitVal = server.exitValue();
+            System.err.println("OpenSSL server exited with status " + exitVal);
+            InputStream err = server.getErrorStream();
+            byte[] errBytes = new byte[err.available()];
+            err.read(errBytes, 0, errBytes.length);
+            System.err.println(new String(errBytes));
+        } catch (IllegalThreadStateException e) {
+            // This is expected (the server should not have exited yet)
+        }
+
+        return server;
     }
 
     public static TestSuite suite() {
@@ -230,5 +270,93 @@ public class BCTlsTest extends TestCase {
         }
 
         junit.textui.TestRunner.run(suite());
+    }
+
+    /**
+     * implementation of BouncyCastle's TLS credential interface
+     * uses same dummy test credentials as the other clients/servers in suite
+     */
+    class TestTlsCredentials implements TlsSignerCredentials {
+        private PrivateKey clientPrivateKey;
+        private Certificate clientCert;
+        private KeyStore ksKeys;
+
+        public TestTlsCredentials() {
+            try {
+                ksKeys = KeyStore.getInstance(KEYSTORE_TYPE);
+                ksKeys.load(new FileInputStream(KEYSTORE_FILE), KEYSTORE_PASS);
+                clientPrivateKey =
+                       (PrivateKey) ksKeys.getKey("importkey", KEYSTORE_PASS);
+                X509Certificate cert =
+                       (X509Certificate) ksKeys.getCertificate("importkey");
+                clientCert = new Certificate(
+                       new X509CertificateStructure[] {X509CertToStruct(cert)});
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        public byte[] generateCertificateSignature(byte[] md5andsha1)
+                throws IOException {
+            // encrypt the input hash with the private key to produce signature
+            try {
+                Cipher cipher = Cipher.getInstance(clientPrivateKey.getAlgorithm());
+                cipher.init(Cipher.ENCRYPT_MODE, clientPrivateKey);
+                return cipher.doFinal(md5andsha1);
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new IOException(e);
+            }
+        }
+
+        public Certificate getCertificate() {
+            return clientCert;
+        }
+
+        /**
+         * TODO: refactor this out somewhere as a utility function
+         */
+        public X509CertificateStructure X509CertToStruct(X509Certificate c)
+                throws CertificateException, IOException {
+            ASN1InputStream is = new ASN1InputStream(c.getEncoded());
+            DERObject o = is.readObject();
+            return X509CertificateStructure.getInstance(o);
+        }
+    }
+
+    /**
+     * Implementation of BouncyCastle's TLS authentication interface
+     * All server certificates are accepted
+     */
+    class TestTlsAuth implements TlsAuthentication {
+        protected CertificateVerifyer verifyer;
+
+        public TestTlsAuth(CertificateVerifyer verifyer) {
+            this.verifyer = verifyer;
+        }
+
+        public void notifyServerCertificate(Certificate serverCertificate)
+                throws IOException {
+            if (!this.verifyer.isValid(serverCertificate.getCerts()))
+            {
+                throw new TlsFatalAlert(AlertDescription.user_canceled);
+            }
+        }
+
+        public TlsCredentials getClientCredentials(CertificateRequest request)
+                throws IOException {
+            return new TestTlsCredentials();
+        }
+    }
+
+    /**
+     * An implementation of BouncyCastle's TLS client interface
+     * The authentication methods are customized for this test suite
+     */
+    class TestTlsClient extends DefaultTlsClient {
+        public TlsAuthentication getAuthentication() throws IOException {
+            return new TestTlsAuth(new AlwaysValidVerifyer());
+        }
     }
 }
