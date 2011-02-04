@@ -115,12 +115,9 @@ public class BCTlsTest extends TestCase {
 
     /**
      * BouncyCastle client to JSSE server tests
-     * TODO: test different protocol variations
      * @throws Exception when the tests fail to run
      */
     public void testBCtoJSSEConnections() throws Exception {
-        String[][] protoVariations = {BOTH};
-
         for (String[] p : protoVariations) {
             for (boolean ca : clientAuthVariations) {
                 printTestName("BC", "JSSE", p, p, ca);
@@ -133,6 +130,19 @@ public class BCTlsTest extends TestCase {
 
                 assertTrue(Arrays.areEqual(MSG, recv));
             }
+        }
+
+        // Test client downgrade from TLSv1 to SSLv3
+        for (boolean ca: clientAuthVariations) {
+            printTestName("BC", "JSSE", BOTH, SSLv3, ca);
+            SSLConnectionServer server = new SSLConnectionServer(SSLv3, ca);
+            JSSEServerThread st = new JSSEServerThread(server, BC_TEST_PORT);
+            st.start();
+            Thread.yield();
+
+            byte[] recv = BCClientConnect(BOTH, BC_TEST_PORT, MSG);
+
+            assertTrue(Arrays.areEqual(MSG, recv));
         }
     }
 
@@ -198,12 +208,9 @@ public class BCTlsTest extends TestCase {
      * It's expected that a file called "helloworld" exist in the working
      * directory that contains data that the server is will return to
      * connected clients.
-     * TODO: test different combinations of SSL & TLS versions
      * @throws Exception when the tests fail to run
      */
     public void testBCtoOpenSSLConnections() throws Exception {
-        String[][] protoVariations = {BOTH};
-
         for (String[] p : protoVariations) {
             for (boolean ca : clientAuthVariations) {
                 printTestName("BC", "OpenSSL", p, p, ca);
@@ -221,6 +228,25 @@ public class BCTlsTest extends TestCase {
                 } finally {
                     server.destroy();
                 }
+            }
+        }
+
+        // Test client downgrade from TLSv1 to SSLv3
+        for (boolean ca : clientAuthVariations) {
+            printTestName("BC", "OpenSSL", BOTH, SSLv3, ca);
+            Process server = startOpenSSLServer(OPENSSL_TEST_PORT, ca, SSLv3);
+
+            String msg = "GET /helloworld HTTP/1.1\r\n\r\n";
+            try {
+                byte[] recv = BCClientConnect(BOTH, OPENSSL_TEST_PORT,
+                        msg.getBytes());
+
+                String recvMsg = new String(recv);
+                assertTrue(recvMsg.contains(new String(MSG)));
+            } catch (Exception e) {
+                throw e;
+            } finally {
+                server.destroy();
             }
         }
     }

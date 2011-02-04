@@ -74,6 +74,16 @@ public class TlsProtocolHandler
     private TlsAuthentication authentication = null;
     private CertificateRequest certificateRequest = null;
 
+    // All supported protocols
+    private TlsProtocolVersion[] enabledProtocols = {TlsProtocolVersion.TLSv10,
+                                                     TlsProtocolVersion.SSLv3};
+    // The highest version supported by the client
+    private TlsProtocolVersion clientVersion = null;
+    // The protocol version that we either
+    // 1) want to be able to negotiate with (client hello)
+    // 2) the server has negotiated with us (set after server hello)
+    private TlsProtocolVersion negotiatedVersion = null;
+
     private short connection_state = 0;
 
     private static SecureRandom createSecureRandom()
@@ -102,6 +112,7 @@ public class TlsProtocolHandler
     {
         this.rs = new RecordStream(this, is, os);
         this.random = sr;
+        updateProtocols();
     }
 
     protected void processData(short protocol, byte[] buf, int offset, int len) throws IOException
@@ -235,9 +246,14 @@ public class TlsProtocolHandler
                     case CS_SERVER_CHANGE_CIPHER_SPEC_RECEIVED:
                         /*
                          * Read the checksum from the finished message, it has always 12
-                         * bytes.
+                         * bytes for TLS 1.0 and 36 for SSLv3.
                          */
-                        byte[] serverVerifyData = new byte[12];
+                        byte[] serverVerifyData;
+                        if (negotiatedVersion == TlsProtocolVersion.SSLv3) {
+                            serverVerifyData = new byte[36];
+                        } else {
+                            serverVerifyData = new byte[12];
+                        }
                         TlsUtils.readFully(serverVerifyData, is);
 
                         assertEmpty(is);
@@ -245,9 +261,12 @@ public class TlsProtocolHandler
                         /*
                          * Calculate our own checksum.
                          */
-                        byte[] expectedServerVerifyData = TlsUtils.PRF(
-                            securityParameters.masterSecret, "server finished",
-                            rs.getCurrentHash(), 12);
+                        byte[] expectedServerVerifyData =
+                                TlsUtils.getFinishedMsg(
+                                        negotiatedVersion,
+                                        securityParameters.masterSecret,
+                                        rs.getHandshakeMessages(),
+                                        "server finished", TlsUtils.SSL_SERVER);
 
                         /*
                          * Compare both checksums.
@@ -257,6 +276,7 @@ public class TlsProtocolHandler
                             /*
                              * Wrong checksum in the finished message.
                              */
+                            System.out.println("Verify server finish FAIL");
                             this.failWithError(AlertLevel.fatal, AlertDescription.handshake_failure);
                         }
 
@@ -278,7 +298,13 @@ public class TlsProtocolHandler
                         /*
                          * Read the server hello message
                          */
-                        TlsUtils.checkVersion(is, this);
+                        int major = is.read();
+                        int minor = is.read();
+                        checkVersion(major, minor);
+                        negotiatedVersion = TlsProtocolVersion.get(major, minor);
+                        tlsClientContext.setNegotiatedVersion(negotiatedVersion);
+                        System.out.println("Server negotiating protocol: "
+                                + major + "." + minor);
 
                         /*
                          * Read the server random
@@ -489,12 +515,36 @@ public class TlsProtocolHandler
 
                         connection_state = CS_CLIENT_KEY_EXCHANGE_SEND;
 
+                        /*
+                         * Calculate the master_secret
+                         */
+                        byte[] pms = this.keyExchange.generatePremasterSecret();
+
+                        securityParameters.masterSecret =
+                                TlsUtils.calculateMasterSecret(
+                                        negotiatedVersion,
+                                        pms,
+                                        securityParameters.clientRandom,
+                                        securityParameters.serverRandom);
+                        System.out.println("PMS: " + getHexString(pms));
+                        System.out.println("MS: " + getHexString(
+                                securityParameters.masterSecret));
+
+                        // TODO Is there a way to ensure the data is really overwritten?
+                        /*
+                         * RFC 2246 8.1. The pre_master_secret should be deleted from
+                         * memory once the master_secret has been computed.
+                         */
+                        Arrays.fill(pms, (byte)0);
+
                         if (clientCreds != null && clientCreds instanceof TlsSignerCredentials)
                         {
                             TlsSignerCredentials signerCreds = (TlsSignerCredentials)clientCreds;
-                            byte[] md5andsha1 = rs.getCurrentHash();
                             byte[] clientCertificateSignature = signerCreds.generateCertificateSignature(
-                                md5andsha1);
+                                TlsUtils.getCertVerify(
+                                    negotiatedVersion,
+                                    securityParameters.masterSecret,
+                                    rs.getHandshakeMessages()));
                             sendCertificateVerify(clientCertificateSignature);
 
                             connection_state = CS_CERTIFICATE_VERIFY_SEND;
@@ -510,21 +560,6 @@ public class TlsProtocolHandler
 
                         connection_state = CS_CLIENT_CHANGE_CIPHER_SPEC_SEND;
 
-                        /*
-                         * Calculate the master_secret
-                         */
-                        byte[] pms = this.keyExchange.generatePremasterSecret();
-
-                        securityParameters.masterSecret = TlsUtils.PRF(pms, "master secret",
-                            TlsUtils.concat(securityParameters.clientRandom,
-                                securityParameters.serverRandom), 48);
-
-                        // TODO Is there a way to ensure the data is really overwritten?
-                        /*
-                         * RFC 2246 8.1. The pre_master_secret should be deleted from
-                         * memory once the master_secret has been computed.
-                         */
-                        Arrays.fill(pms, (byte)0);
 
                         /*
                          * Initialize our cipher suite
@@ -534,13 +569,16 @@ public class TlsProtocolHandler
                         /*
                          * Send our finished message.
                          */
-                        byte[] clientVerifyData = TlsUtils.PRF(securityParameters.masterSecret,
-                            "client finished", rs.getCurrentHash(), 12);
+                        byte[] clientVerifyData = TlsUtils.getFinishedMsg(
+                                negotiatedVersion,
+                                securityParameters.masterSecret,
+                                rs.getHandshakeMessages(),
+                                "client finished", TlsUtils.SSL_CLIENT);
 
                         ByteArrayOutputStream bos = new ByteArrayOutputStream();
                         TlsUtils.writeUint8(HandshakeType.finished, bos);
                         TlsUtils.writeOpaque24(clientVerifyData, bos);
-                        byte[] message = bos.toByteArray();
+                        byte [] message = bos.toByteArray();
 
                         rs.writeMessage(ContentType.handshake, message, 0, message.length);
 
@@ -830,12 +868,13 @@ public class TlsProtocolHandler
         random.nextBytes(securityParameters.clientRandom);
         TlsUtils.writeGMTUnixTime(securityParameters.clientRandom, 0);
 
-        this.tlsClientContext = new TlsClientContextImpl(random, securityParameters);
+        this.tlsClientContext = new TlsClientContextImpl(random, securityParameters, clientVersion, negotiatedVersion);
         this.tlsClient = tlsClient;
         this.tlsClient.init(tlsClientContext);
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
-        TlsUtils.writeVersion(os);
+        os.write(clientVersion.getMajorVersion());
+        os.write(clientVersion.getMinorVersion());
         os.write(securityParameters.clientRandom);
 
         /*
@@ -1206,5 +1245,99 @@ public class TlsProtocolHandler
     {
         TlsUtils.writeUint16(extType.intValue(), output);
         TlsUtils.writeOpaque16(extValue, output);
+    }
+
+    private void updateProtocols() {
+        clientVersion = enabledProtocols[0];
+        for (int i = 1; i < enabledProtocols.length; ++i) {
+            if (clientVersion.getVersion() < enabledProtocols[i].getVersion()) {
+                clientVersion = enabledProtocols[i];
+            }
+        }
+        System.out.println("Client Version: " + clientVersion.getMajorVersion()
+                            + " " + clientVersion.getMinorVersion());
+
+        // During the client hello, if we wish to be able to speak to
+        // SSLv3 servers, then the record version should report SSLv3
+        // while the version of the client hello reports TLS.
+        // See RFC 2246 Appendix E
+        if (allowSSLv3Downgrade()) {
+            negotiatedVersion = TlsProtocolVersion.SSLv3;
+            System.out.println("Client negotiating SSLv3");
+        } else {
+            negotiatedVersion = clientVersion;
+        }
+    }
+
+    public TlsProtocolVersion[] getEnabledProtocols() {
+        return enabledProtocols;
+    }
+
+    public void setEnabledProtocols(TlsProtocolVersion[] protocols) {
+        if (connection_state != 0) {
+            throw new IllegalStateException("Changing enabled protocols" +
+                    "not allowed after connect() has been called.");
+        }
+        this.enabledProtocols = protocols;
+        updateProtocols();
+    }
+
+    public void setEnabledProtocols(String[] protocols) {
+        TlsProtocolVersion[] vers = new TlsProtocolVersion[protocols.length];
+        for (int i = 0; i < protocols.length; ++i) {
+            try {
+                vers[i] = TlsProtocolVersion.get(protocols[i]);
+            } catch (TlsFatalAlert tlsFatalAlert) {
+                throw new IllegalArgumentException(
+                        "Unknown TLS/SSL protocol version " + protocols[i]);
+            }
+        }
+        setEnabledProtocols(vers);
+    }
+
+    protected void checkVersion(InputStream is) throws IOException {
+        int major = is.read();
+        int minor = is.read();
+        checkVersion(major, minor);
+    }
+
+    protected void checkVersion(int major, int minor) throws TlsFatalAlert {
+        TlsProtocolVersion checkMe = TlsProtocolVersion.get(major, minor);
+        for (TlsProtocolVersion p : enabledProtocols) {
+            if (p == checkMe) {
+                return;
+            }
+        }
+        throw new TlsFatalAlert(AlertDescription.protocol_version);
+    }
+
+    public TlsProtocolVersion getNegotiatedVersion() {
+        return negotiatedVersion;
+    }
+
+    protected void writeVersion(byte[] buf, int offset) {
+        buf[offset] = (byte) negotiatedVersion.getMajorVersion();
+        buf[offset + 1] = (byte) negotiatedVersion.getMinorVersion();
+    }
+
+    private boolean allowSSLv3Downgrade() {
+        for (TlsProtocolVersion p : enabledProtocols) {
+            if (p == TlsProtocolVersion.SSLv3) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * TODO: remove me
+     */
+    public static String getHexString(byte[] b) {
+        String result = "";
+        for (int i = 0; i < b.length; i++) {
+            result +=
+                    Integer.toString((b[i] & 0xff) + 0x100, 16).substring(1);
+        }
+        return result;
     }
 }

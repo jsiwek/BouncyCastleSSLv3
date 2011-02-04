@@ -6,7 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 /**
- * An implementation of the TLS 1.0 record layer.
+ * An implementation of the TLS 1.0 record layer, allowing downgrade to SSLv3.
  */
 // TODO Use fixed temporary buffers (since there is a limit on the size) for input/output
 class RecordStream
@@ -14,7 +14,7 @@ class RecordStream
     private TlsProtocolHandler handler;
     private InputStream is;
     private OutputStream os;
-    private CombinedHash hash;
+    private byte[] handshake_messages;
     private TlsCompression readCompression = null;
     private TlsCompression writeCompression = null;
     private TlsCipher readCipher = null;
@@ -25,7 +25,7 @@ class RecordStream
         this.handler = handler;
         this.is = is;
         this.os = os;
-        this.hash = new CombinedHash();
+        this.handshake_messages = new byte[0];
         this.readCompression = new TlsNullCompression();
         this.writeCompression = this.readCompression;
         this.readCipher = new TlsNullCipher();
@@ -47,8 +47,11 @@ class RecordStream
     public void readData() throws IOException
     {
         short type = TlsUtils.readUint8(is);
-        TlsUtils.checkVersion(is, handler);
+        System.out.println("Read record type: " + type);
+        handler.checkVersion(is);
         int size = TlsUtils.readUint16(is);
+        System.out.println("Reading record length: " + size);
+
         byte[] buf = decodeAndVerify(type, is, size);
         handler.processData(type, buf, 0, buf.length);
     }
@@ -81,8 +84,9 @@ class RecordStream
 
         byte[] ciphertext = writeCipher.encodePlaintext(type, compressed, 0, compressed.length);
         byte[] writeMessage = new byte[ciphertext.length + 5];
+        System.out.println("Write record type: " + type);
         TlsUtils.writeUint8(type, writeMessage, 0);
-        TlsUtils.writeVersion(writeMessage, 1);
+        handler.writeVersion(writeMessage, 1);
         TlsUtils.writeUint16(ciphertext.length, writeMessage, 3);
         System.arraycopy(ciphertext, 0, writeMessage, 5, ciphertext.length);
         os.write(writeMessage);
@@ -91,12 +95,14 @@ class RecordStream
 
     void updateHandshakeData(byte[] message, int offset, int len)
     {
-        hash.update(message, offset, len);
+        byte[] newArr = new byte[handshake_messages.length + len];
+        System.arraycopy(handshake_messages, 0, newArr, 0, handshake_messages.length);
+        System.arraycopy(message, offset, newArr, handshake_messages.length, len);
+        handshake_messages = newArr;
     }
 
-    byte[] getCurrentHash()
-    {
-        return doFinal(new CombinedHash(hash));
+    byte[] getHandshakeMessages() {
+        return handshake_messages;
     }
 
     protected void close() throws IOException
@@ -127,12 +133,5 @@ class RecordStream
     protected void flush() throws IOException
     {
         os.flush();
-    }
-
-    private static byte[] doFinal(CombinedHash ch)
-    {
-        byte[] bs = new byte[ch.getDigestSize()];
-        ch.doFinal(bs, 0);
-        return bs;
     }
 }

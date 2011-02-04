@@ -10,7 +10,8 @@ import org.bouncycastle.crypto.params.ParametersWithIV;
 import org.bouncycastle.util.Arrays;
 
 /**
- * A generic TLS 1.0 block cipher. This can be used for AES or 3DES for example.
+ * A generic TLS 1.0 / SSLv3 block cipher.
+ * This can be used for AES or 3DES for example.
  */
 public class TlsBlockCipher implements TlsCipher
 {
@@ -34,18 +35,27 @@ public class TlsBlockCipher implements TlsCipher
             + decryptCipher.getBlockSize();
 
         SecurityParameters securityParameters = context.getSecurityParameters();
-
-        byte[] key_block = TlsUtils.PRF(securityParameters.masterSecret, "key expansion",
-            TlsUtils.concat(securityParameters.serverRandom, securityParameters.clientRandom),
-            prfSize);
+        byte[] key_block = TlsUtils.calculateKeyBlock(
+                context.getNegotiatedVersion(),
+                prfSize,
+                securityParameters.masterSecret,
+                securityParameters.clientRandom,
+                securityParameters.serverRandom);
 
         int offset = 0;
 
         // Init MACs
-        writeMac = new TlsMac(writeDigest, key_block, offset, writeDigest.getDigestSize());
+        writeMac = new TlsMac(context, writeDigest, key_block, offset, writeDigest.getDigestSize());
         offset += writeDigest.getDigestSize();
-        readMac = new TlsMac(readDigest, key_block, offset, readDigest.getDigestSize());
+        readMac = new TlsMac(context, readDigest, key_block, offset, readDigest.getDigestSize());
         offset += readDigest.getDigestSize();
+
+        /*
+        System.out.println("Write MAC Secret: " +
+                getHexString(writeMac.getMACSecret()));
+        System.out.println("Read MAC Secret: " +
+                getHexString(readMac.getMACSecret()));
+        */
 
         // Init Ciphers
         this.initCipher(true, encryptCipher, key_block, cipherKeySize, offset, offset
@@ -62,6 +72,8 @@ public class TlsBlockCipher implements TlsCipher
         KeyParameter key_parameter = new KeyParameter(key_block, key_offset, key_size);
         ParametersWithIV parameters_with_iv = new ParametersWithIV(key_parameter, key_block,
             iv_offset, cipher.getBlockSize());
+        System.out.println("key: " + getHexString(key_parameter.getKey()));
+        System.out.println("IV: " + getHexString(parameters_with_iv.getIV()));
         cipher.init(forEncryption, parameters_with_iv);
     }
 
@@ -72,8 +84,14 @@ public class TlsBlockCipher implements TlsCipher
         // Add a random number of extra blocks worth of padding
         int minPaddingSize = blocksize - ((len + writeMac.getSize() + 1) % blocksize);
         int maxExtraPadBlocks = (255 - minPaddingSize) / blocksize;
-        int actualExtraPadBlocks = chooseExtraPadBlocks(context.getSecureRandom(), maxExtraPadBlocks);
+        int actualExtraPadBlocks;
+        if (context.getNegotiatedVersion() == TlsProtocolVersion.SSLv3) {
+            actualExtraPadBlocks = 0;
+        } else {
+            actualExtraPadBlocks = chooseExtraPadBlocks(context.getSecureRandom(), maxExtraPadBlocks);
+        }
         int paddingsize = minPaddingSize + (actualExtraPadBlocks * blocksize);
+        System.out.println("Pad size: " + paddingsize);
 
         int totalsize = len + writeMac.getSize() + paddingsize + 1;
         byte[] outbuf = new byte[totalsize];
@@ -132,8 +150,11 @@ public class TlsBlockCipher implements TlsCipher
 
         byte paddingsizebyte = ciphertext[lastByteOffset];
 
+        System.out.println("Padding size byte: " + paddingsizebyte);
+
         // Note: interpret as unsigned byte
         int paddingsize = paddingsizebyte & 0xff;
+        System.out.println("Padding size: " + paddingsize);
 
         int maxPaddingSize = len - minLength;
         if (paddingsize > maxPaddingSize)
@@ -141,10 +162,11 @@ public class TlsBlockCipher implements TlsCipher
             decrypterror = true;
             paddingsize = 0;
         }
-        else
+        else if (context.getNegotiatedVersion() != TlsProtocolVersion.SSLv3)
         {
             /*
              * Now, check all the padding-bytes (constant-time comparison).
+             * SSLv3 padding can be any value, so this is skipped for that case
              */
             byte diff = 0;
             for (int i = lastByteOffset - paddingsize; i < lastByteOffset; ++i)
@@ -215,5 +237,15 @@ public class TlsBlockCipher implements TlsCipher
             x >>= 1;
         }
         return n;
+    }
+
+    // TODO: remove me
+    public static String getHexString(byte[] b) {
+        String result = "";
+        for (int i = 0; i < b.length; i++) {
+            result +=
+                    Integer.toString((b[i] & 0xff) + 0x100, 16).substring(1);
+        }
+        return result;
     }
 }

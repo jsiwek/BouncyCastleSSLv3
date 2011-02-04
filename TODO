@@ -1,1 +1,7 @@
+# SSLv3
+Test other key exchanges besides RSA
 
+# GSS
+TlsBlockCipher needs getters for write/read MAC
+TlsMac needs to preserve the secret key from the key_block
+TlsMac needs a getter for the secret and seqNo (also way to increment seqNo)

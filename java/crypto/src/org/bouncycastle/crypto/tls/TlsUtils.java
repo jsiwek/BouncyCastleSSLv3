@@ -4,6 +4,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
 
 import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.x509.KeyUsage;
@@ -14,6 +15,7 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.MD5Digest;
 import org.bouncycastle.crypto.digests.SHA1Digest;
 import org.bouncycastle.crypto.macs.HMac;
+import org.bouncycastle.crypto.macs.SSL3HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.util.Strings;
 import org.bouncycastle.util.io.Streams;
@@ -204,26 +206,6 @@ public class TlsUtils
         return value;
     }
 
-    protected static void checkVersion(byte[] readVersion, TlsProtocolHandler handler)
-        throws IOException
-    {
-        if ((readVersion[0] != 3) || (readVersion[1] != 1))
-        {
-            throw new TlsFatalAlert(AlertDescription.protocol_version);
-        }
-    }
-
-    protected static void checkVersion(InputStream is, TlsProtocolHandler handler)
-        throws IOException
-    {
-        int i1 = is.read();
-        int i2 = is.read();
-        if ((i1 != 3) || (i2 != 1))
-        {
-            throw new TlsFatalAlert(AlertDescription.protocol_version);
-        }
-    }
-
     protected static void writeGMTUnixTime(byte[] buf, int offset)
     {
         int t = (int)(System.currentTimeMillis() / 1000L);
@@ -231,18 +213,6 @@ public class TlsUtils
         buf[offset + 1] = (byte)(t >> 16);
         buf[offset + 2] = (byte)(t >> 8);
         buf[offset + 3] = (byte)t;
-    }
-
-    protected static void writeVersion(OutputStream os) throws IOException
-    {
-        os.write(3);
-        os.write(1);
-    }
-
-    protected static void writeVersion(byte[] buf, int offset) throws IOException
-    {
-        buf[offset] = 3;
-        buf[offset + 1] = 1;
     }
 
     private static void hmac_hash(Digest digest, byte[] secret, byte[] seed, byte[] out)
@@ -315,5 +285,160 @@ public class TlsUtils
                 }
             }
         }
+    }
+
+    // TODO: clean up and refactor SSLv3 versus TLsv1 utility functions below
+
+    // This is similar to SSL3HMac, but the secret key does not get put in first
+    private static void updateDigest(Digest md, byte[] hs_msgs,
+                      byte[] sender, byte[] secret, byte[] pad1, byte[] pad2) {
+        md.update(hs_msgs, 0, hs_msgs.length);
+        if (sender != null) md.update(sender, 0, sender.length);
+        md.update(secret, 0, secret.length);
+        md.update(pad1, 0, pad1.length);
+
+        byte[] tmp = new byte[md.getDigestSize()];
+        md.doFinal(tmp, 0);
+
+        md.update(secret, 0, secret.length);
+        md.update(pad2, 0, pad2.length);
+        md.update(tmp, 0, tmp.length);
+    }
+
+    // byte[] sender only sent for finish message
+    protected static byte[] getSSLHandshakeHash(byte[] sender, byte[] secret,
+                                                byte[] handshake_messages) {
+        Digest md5 = new MD5Digest();
+        Digest sha1 = new SHA1Digest();
+
+        updateDigest(md5, handshake_messages, sender, secret,
+                     SSL3HMac.MD5_pad1, SSL3HMac.MD5_pad2);
+        updateDigest(sha1, handshake_messages, sender, secret,
+                     SSL3HMac.SHA_pad1, SSL3HMac.SHA_pad2);
+
+        byte[] rval = new byte[36];
+
+        md5.doFinal(rval, 0);
+        sha1.doFinal(rval, 16);
+        return rval;
+    }
+
+    protected static byte[] getCertVerify(TlsProtocolVersion p, byte[] secret,
+                                          byte[] handshake_messages) {
+        if (p == TlsProtocolVersion.SSLv3) {
+            return getSSLHandshakeHash(null, secret, handshake_messages);
+        } else {
+            CombinedHash hash = new CombinedHash();
+            hash.update(handshake_messages, 0, handshake_messages.length);
+            byte[] bs = new byte[hash.getDigestSize()];
+            hash.doFinal(bs, 0);
+            return bs;
+        }
+    }
+
+    protected static byte[] getFinishedMsg(TlsProtocolVersion p, byte[] secret,
+                                        byte[] handshake_messages, String msg,
+                                        byte[] sender) {
+        byte[] verifyData;
+        if (p == TlsProtocolVersion.SSLv3) {
+            verifyData = getSSLHandshakeHash(sender, secret, handshake_messages);
+        } else {
+            CombinedHash hash = new CombinedHash();
+            hash.update(handshake_messages, 0, handshake_messages.length);
+            byte[] bs = new byte[hash.getDigestSize()];
+            hash.doFinal(bs, 0);
+
+            verifyData = PRF(secret, msg, bs, 12);
+        }
+
+        return verifyData;
+    }
+
+    protected static byte[] calculateMasterSecret(TlsProtocolVersion p,
+                                                  byte[] pre_master_secret,
+                                                  byte[] client_random,
+                                                  byte[] server_random) {
+        if (p == TlsProtocolVersion.SSLv3) {
+            Digest md5 = new MD5Digest();
+            Digest sha1 = new SHA1Digest();
+            byte[] shatmp = new byte[sha1.getDigestSize()];
+            byte[] md5tmp = new byte[md5.getDigestSize()];
+
+            byte rval[] = new byte[0];
+
+            for (int i = 0; i < 3; ++i) {
+                byte[] block = concat(SSL3_CONST[i],
+                               concat(pre_master_secret,
+                               concat(client_random, server_random)));
+                sha1.update(block, 0, block.length);
+                sha1.doFinal(shatmp, 0);
+
+                block = concat(pre_master_secret, shatmp);
+                md5.update(block, 0, block.length);
+                md5.doFinal(md5tmp, 0);
+
+                rval = concat(rval, md5tmp);
+            }
+
+            return rval;
+        } else {
+            return PRF(pre_master_secret, "master secret",
+                    concat(client_random, server_random), 48);
+        }
+    }
+
+    protected static byte[] calculateKeyBlock(TlsProtocolVersion p, int prfSize,
+                                               byte[] master_secret,
+                                               byte[] client_random,
+                                               byte[] server_random) {
+        if (p == TlsProtocolVersion.SSLv3) {
+            int i = 0;
+            byte tmp[] = new byte[0];
+
+            Digest md5 = new MD5Digest();
+            Digest sha1 = new SHA1Digest();
+            byte[] shatmp = new byte[sha1.getDigestSize()];
+            byte[] md5tmp = new byte[md5.getDigestSize()];
+
+            while (tmp.length < prfSize) {
+                byte[] block = concat(SSL3_CONST[i],
+                               concat(master_secret,
+                               concat(server_random, client_random)));
+                sha1.update(block, 0, block.length);
+                sha1.doFinal(shatmp, 0);
+
+                block = concat(master_secret, shatmp);
+                md5.update(block, 0, block.length);
+                md5.doFinal(md5tmp, 0);
+
+                tmp = concat(tmp, md5tmp);
+
+                ++i;
+            }
+
+            byte rval[] = new byte[prfSize];
+            System.arraycopy(tmp, 0, rval, 0, prfSize);
+            return rval;
+        } else {
+            return PRF(master_secret, "key expansion",
+                    concat(server_random, client_random), prfSize);
+        }
+    }
+
+    protected static final byte[] SSL_CLIENT = { 0x43, 0x4C, 0x4E, 0x54 };
+    protected static final byte[] SSL_SERVER = { 0x53, 0x52, 0x56, 0x52 };
+
+    // SSL3 magic mix constants ("A", "BB", "CCC", ...)
+    protected final static byte[][] SSL3_CONST = genConst();
+
+    private static byte[][] genConst() {
+        int n = 10;
+        byte[][] arr = new byte[n][];
+        for (int i = 0; i < n; i++) {
+            byte[] b = new byte[i + 1];
+            Arrays.fill(b, (byte)('A' + i));
+            arr[i] = b;
+        }
+        return arr;
     }
 }

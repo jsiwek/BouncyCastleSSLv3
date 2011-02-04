@@ -1,3 +1,45 @@
-# BouncyCastle was checked out like:
+# The structure of the branches in this git repository looks like:
+
+    bccvs
+    |   |
+    V   V
+  ssl3  gss
+    |   |
+    V   V
+    master
+
+# bccvs
+An unaltered version of the BouncyCastle CVS repository.
+Originally checked out like:
+
 export CVSROOT=:pserver:anonymous@cvs.bouncycastle.org:/home/users/bouncy/cvsroot
 cvs co java
+
+It can be regularly updated (e.g. `cvs update`) and the changed merged
+downstream into ssl3 and gss branches.
+
+# ssl3
+Contains changes to BouncyCastle's lightweight client TLS implementation
+to allow it to speak SSLv3.  The main differences between SSLv3 and TLSv10
+are listed below:
+
+- the version number of TLS is 3.1 and SSL is 3.0
+- slightly different MAC schemes (SSLv3 uses a draft HMAC implementation)
+- different pseudorandom functions
+- additional alert codes in TLS
+- [skip] TLS does not support Fortezza while SSLv3 does
+- [skip or TODO?] SSLv3 has additional client certificate types for
+  ephemeral Diffie Hellman scheme that TLS does not
+- hashes calculated differently over the certificate verify handshake message
+- different calculation of the master secret
+- block cipher padding lengths. In SSLv3, the padding length is the
+  minimum required to obtain a multiple of the cipher's block length
+  while TLS allows any padding length that results in a multiple of
+  the block length
+
+# gss
+Contains changes to the BouncyCastle's lightweight client TLS implementation
+to allow it to be used in a GSSAPI implementation.
+
+# master
+Contains merged changes from the ssl3 and gss branches.
