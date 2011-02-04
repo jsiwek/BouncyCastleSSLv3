@@ -3,16 +3,12 @@ import junit.framework.TestSuite;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.DERObject;
 import org.bouncycastle.asn1.x509.X509CertificateStructure;
-import org.bouncycastle.crypto.tls.AlertDescription;
-import org.bouncycastle.crypto.tls.AlwaysValidVerifyer;
 import org.bouncycastle.crypto.tls.Certificate;
 import org.bouncycastle.crypto.tls.CertificateRequest;
-import org.bouncycastle.crypto.tls.CertificateVerifyer;
 import org.bouncycastle.crypto.tls.CipherSuite;
 import org.bouncycastle.crypto.tls.DefaultTlsClient;
 import org.bouncycastle.crypto.tls.TlsAuthentication;
 import org.bouncycastle.crypto.tls.TlsCredentials;
-import org.bouncycastle.crypto.tls.TlsFatalAlert;
 import org.bouncycastle.crypto.tls.TlsProtocolHandler;
 import org.bouncycastle.crypto.tls.TlsSignerCredentials;
 import org.bouncycastle.util.Arrays;
@@ -373,18 +369,11 @@ public class BCTlsTest extends TestCase {
      * All server certificates are accepted
      */
     class TestTlsAuth implements TlsAuthentication {
-        protected CertificateVerifyer verifyer;
-
-        public TestTlsAuth(CertificateVerifyer verifyer) {
-            this.verifyer = verifyer;
+        public TestTlsAuth() {
         }
 
         public void notifyServerCertificate(Certificate serverCertificate)
                 throws IOException {
-            if (!this.verifyer.isValid(serverCertificate.getCerts()))
-            {
-                throw new TlsFatalAlert(AlertDescription.user_canceled);
-            }
         }
 
         public TlsCredentials getClientCredentials(CertificateRequest request)
@@ -399,7 +388,7 @@ public class BCTlsTest extends TestCase {
      */
     class TestTlsClient extends DefaultTlsClient {
         public TlsAuthentication getAuthentication() throws IOException {
-            return new TestTlsAuth(new AlwaysValidVerifyer());
+            return new TestTlsAuth();
         }
 
         public int[] getCipherSuites() {
