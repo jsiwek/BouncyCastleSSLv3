@@ -14,6 +14,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 public class TlsMac
 {
     protected long seqNo;
+    protected  byte[] secret;
     protected HMac mac;
 
     /**
@@ -26,10 +27,33 @@ public class TlsMac
      */
     public TlsMac(Digest digest, byte[] key_block, int offset, int len)
     {
+        this.secret = new byte[len];
+        System.arraycopy(key_block, offset, this.secret, 0, len);
         this.mac = new HMac(digest);
         KeyParameter param = new KeyParameter(key_block, offset, len);
         this.mac.init(param);
         this.seqNo = 0;
+    }
+
+    /**
+     * @return the MAC write secret
+     */
+    public byte[] getMACSecret() {
+        return this.secret;
+    }
+
+    /**
+     * @return the current write sequence number
+     */
+    public long getSequenceNumber() {
+        return this.seqNo;
+    }
+
+    /**
+     * Increment the current write sequence number
+     */
+    public void incSequence() {
+        this.seqNo++;
     }
 
     /**

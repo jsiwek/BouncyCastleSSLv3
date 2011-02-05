@@ -1,8 +1,13 @@
-all: lcrypto
+all: lcrypto gss
 
 lcrypto:
 	./build
 
+# depends on lcrypto
+gss:
+	./build gss
+
+# depends on lcrypto
 test:
 	./build test
 

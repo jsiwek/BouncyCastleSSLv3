@@ -41,5 +41,13 @@ are listed below:
 Contains changes to the BouncyCastle's lightweight client TLS implementation
 to allow it to be used in a GSSAPI implementation.
 
+- RecordStream is augmented to keep track of when it's blocking
+- TlsProtocolHandler is augmented so that connect() can be run inside a thread
+- TlsBlockCipher needed getters for write/read MAC
+- TlsMac needed
+  - to preserve the secret key from the key_block
+  - a getter for the secret and seqNo
+  - a way to increment seqNo
+
 # master
 Contains merged changes from the ssl3 and gss branches.
