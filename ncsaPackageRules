@@ -1,0 +1,1 @@
+rule org.bouncycastle.** edu.illinois.ncsa.bouncycastle.@1

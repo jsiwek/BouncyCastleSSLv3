@@ -1340,4 +1340,35 @@ public class TlsProtocolHandler
         }
         return result;
     }
+
+    /**
+     * JLS: added stuff below here for use with GSS.
+     * It's all necessary for running the connect() method inside a thread.
+     * The record stream has to be altered to keep track of when it's blocking
+     * and we need to be able to find out if the handshake is finished,
+     * otherwise we can never tell when the state machine has produced a full
+     * output token and is waiting to consume network data
+     */
+    private int handshakeBlocking = 0;
+
+    public synchronized int getHandshakeBlocking() {
+        return handshakeBlocking;
+    }
+
+    public synchronized void incHandshakeBlocking(int len) {
+        handshakeBlocking += len;
+    }
+
+    public synchronized void decHandshakeBlocking(int len) {
+        handshakeBlocking -= len;
+        if (handshakeBlocking < 0) handshakeBlocking = 0;
+    }
+
+    public synchronized boolean isHandshakeFinished() {
+        return connection_state == CS_DONE;
+    }
+
+    public synchronized int getApplicationDataQueueSize() {
+        return applicationDataQueue.size();
+    }
 }

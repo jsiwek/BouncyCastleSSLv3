@@ -46,11 +46,21 @@ class RecordStream
 
     public void readData() throws IOException
     {
+        int availBytes = is.available();
+        if (availBytes < 5) {
+            this.handler.incHandshakeBlocking(5 - availBytes);
+        }
+
         short type = TlsUtils.readUint8(is);
         System.out.println("Read record type: " + type);
         handler.checkVersion(is);
         int size = TlsUtils.readUint16(is);
         System.out.println("Reading record length: " + size);
+
+        availBytes = is.available();
+        if (availBytes < size) {
+            this.handler.incHandshakeBlocking(size - availBytes);
+        }
 
         byte[] buf = decodeAndVerify(type, is, size);
         handler.processData(type, buf, 0, buf.length);

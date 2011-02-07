@@ -2,7 +2,14 @@
 #
 # Build script.
 # A successful build will place a lcrypto-${version}.jar in out/
+#
 # Specify "test" as the first argument to this script to run tests.
+#
+# Specify "gss" as the first argument to create a jar of the TLS
+# classes under a different package name so that it doesn't conflict with
+# applications that use the BouncyCastle provider/jce jar (since that's
+# not something that anyone can make and distribute without a Sun code
+# signing certificate)
 
 sourcedir="$( cd "$( dirname "$0" )" && pwd )"
 
@@ -14,12 +21,19 @@ dottedjdk="jdk1.6"
 jdk=`echo ${dottedjdk} | sed 's/\.//'`
 buildxml=${jdk}.xml
 buildprops=java/crypto/bc-build.properties
-
-
 ver=`cat ${buildprops} | sed -n 's/release.suffix: //p' | cut -d . -f 2`
 lcrypto_jar=lcrypto-${ver}.jar
+ncsa_jar=ncsa-${lcrypto_jar}
 
-if [ "$1" != "test" ]; then
+if [ "$1" = "test" ]; then
+    export CLASSPATH=${sourcedir}/out/:${CLASSPATH}
+    export CLASSPATH=${sourcedir}/out/${lcrypto_jar}:${CLASSPATH}
+    javac -d out/ testing/src/*.java
+    cd testing
+    java org.junit.runner.JUnitCore BCTlsTest
+elif [ "$1" = "gss" ]; then
+    java -jar deps/jarjar-1.0.jar process ncsaPackageRules out/${lcrypto_jar} out/${ncsa_jar}
+else
     cd java/crypto
 
     ant -f ${buildxml} build-lw
@@ -29,11 +43,5 @@ if [ "$1" != "test" ]; then
         jar -cf ${lcrypto_jar} .
         mkdir -p ${sourcedir}/out
         mv ${lcrypto_jar} ${sourcedir}/out
-    fi
-else
-    export CLASSPATH=${sourcedir}/out/:${CLASSPATH}
-    export CLASSPATH=${sourcedir}/out/${lcrypto_jar}:${CLASSPATH}
-    javac -d out/ testing/src/*.java
-    cd testing
-    java org.junit.runner.JUnitCore BCTlsTest
+   fi
 fi

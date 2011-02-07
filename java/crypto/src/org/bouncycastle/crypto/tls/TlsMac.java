@@ -18,6 +18,7 @@ public class TlsMac
     TlsClientContext context;
     protected long seqNo;
     protected Mac mac;
+    protected  byte[] secret;
 
     /**
      * Generate a new instance of an TlsMac.
@@ -36,9 +37,32 @@ public class TlsMac
         } else {
             this.mac = new HMac(digest);
         }
+        this.secret = new byte[len];
+        System.arraycopy(key_block, offset, this.secret, 0, len);
         KeyParameter param = new KeyParameter(key_block, offset, len);
         this.mac.init(param);
         this.seqNo = 0;
+    }
+
+    /**
+     * @return the MAC write secret
+     */
+    public byte[] getMACSecret() {
+        return this.secret;
+    }
+
+    /**
+     * @return the current write sequence number
+     */
+    public long getSequenceNumber() {
+        return this.seqNo;
+    }
+
+    /**
+     * Increment the current write sequence number
+     */
+    public void incSequence() {
+        this.seqNo++;
     }
 
     /**
