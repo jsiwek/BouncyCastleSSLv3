@@ -50,13 +50,6 @@ public class TlsBlockCipher implements TlsCipher
         readMac = new TlsMac(context, readDigest, key_block, offset, readDigest.getDigestSize());
         offset += readDigest.getDigestSize();
 
-        /*
-        System.out.println("Write MAC Secret: " +
-                getHexString(writeMac.getMACSecret()));
-        System.out.println("Read MAC Secret: " +
-                getHexString(readMac.getMACSecret()));
-        */
-
         // Init Ciphers
         this.initCipher(true, encryptCipher, key_block, cipherKeySize, offset, offset
             + (cipherKeySize * 2));
@@ -72,8 +65,6 @@ public class TlsBlockCipher implements TlsCipher
         KeyParameter key_parameter = new KeyParameter(key_block, key_offset, key_size);
         ParametersWithIV parameters_with_iv = new ParametersWithIV(key_parameter, key_block,
             iv_offset, cipher.getBlockSize());
-        System.out.println("key: " + getHexString(key_parameter.getKey()));
-        System.out.println("IV: " + getHexString(parameters_with_iv.getIV()));
         cipher.init(forEncryption, parameters_with_iv);
     }
 
@@ -91,7 +82,6 @@ public class TlsBlockCipher implements TlsCipher
             actualExtraPadBlocks = chooseExtraPadBlocks(context.getSecureRandom(), maxExtraPadBlocks);
         }
         int paddingsize = minPaddingSize + (actualExtraPadBlocks * blocksize);
-        System.out.println("Pad size: " + paddingsize);
 
         int totalsize = len + writeMac.getSize() + paddingsize + 1;
         byte[] outbuf = new byte[totalsize];
@@ -150,11 +140,8 @@ public class TlsBlockCipher implements TlsCipher
 
         byte paddingsizebyte = ciphertext[lastByteOffset];
 
-        System.out.println("Padding size byte: " + paddingsizebyte);
-
         // Note: interpret as unsigned byte
         int paddingsize = paddingsizebyte & 0xff;
-        System.out.println("Padding size: " + paddingsize);
 
         int maxPaddingSize = len - minLength;
         if (paddingsize > maxPaddingSize)
@@ -237,15 +224,5 @@ public class TlsBlockCipher implements TlsCipher
             x >>= 1;
         }
         return n;
-    }
-
-    // TODO: remove me
-    public static String getHexString(byte[] b) {
-        String result = "";
-        for (int i = 0; i < b.length; i++) {
-            result +=
-                    Integer.toString((b[i] & 0xff) + 0x100, 16).substring(1);
-        }
-        return result;
     }
 }

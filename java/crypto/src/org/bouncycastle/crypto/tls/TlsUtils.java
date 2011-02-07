@@ -287,8 +287,6 @@ public class TlsUtils
         }
     }
 
-    // TODO: clean up and refactor SSLv3 versus TLsv1 utility functions below
-
     // This is similar to SSL3HMac, but the secret key does not get put in first
     private static void updateDigest(Digest md, byte[] hs_msgs,
                       byte[] sender, byte[] secret, byte[] pad1, byte[] pad2) {
