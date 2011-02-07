@@ -17,7 +17,7 @@ openssl genrsa -des3 -out server.key 1024
 <enter any passphrase>
 
 # Strip passphrase
-openssl rsa -in server.key.org -out server.key
+openssl rsa -in server.key -out server.key
 <re-enter passphrase>
 
 # Generate a self-signed certificate
