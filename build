@@ -17,7 +17,7 @@ junitJarPath=${sourcedir}/deps/junit-4.8.2.jar
 
 export CLASSPATH=${junitJarPath}:$CLASSPATH
 
-dottedjdk="jdk1.6"
+dottedjdk="jdk1.5"
 jdk=`echo ${dottedjdk} | sed 's/\.//'`
 buildxml=${jdk}.xml
 buildprops=java/crypto/bc-build.properties
