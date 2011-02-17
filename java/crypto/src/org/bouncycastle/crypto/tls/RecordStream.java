@@ -52,8 +52,10 @@ class RecordStream
         }
 
         short type = TlsUtils.readUint8(is);
+        System.out.println("Read record type: " + type);
         handler.checkVersion(is);
         int size = TlsUtils.readUint16(is);
+        System.out.println("Reading record length: " + size);
 
         availBytes = is.available();
         if (availBytes < size) {
@@ -92,6 +94,7 @@ class RecordStream
 
         byte[] ciphertext = writeCipher.encodePlaintext(type, compressed, 0, compressed.length);
         byte[] writeMessage = new byte[ciphertext.length + 5];
+        System.out.println("Write record type: " + type);
         TlsUtils.writeUint8(type, writeMessage, 0);
         handler.writeVersion(writeMessage, 1);
         TlsUtils.writeUint16(ciphertext.length, writeMessage, 3);

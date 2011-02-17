@@ -276,6 +276,7 @@ public class TlsProtocolHandler
                             /*
                              * Wrong checksum in the finished message.
                              */
+                            System.out.println("Verify server finish FAIL");
                             this.failWithError(AlertLevel.fatal, AlertDescription.handshake_failure);
                         }
 
@@ -302,6 +303,8 @@ public class TlsProtocolHandler
                         checkVersion(major, minor);
                         negotiatedVersion = TlsProtocolVersion.get(major, minor);
                         tlsClientContext.setNegotiatedVersion(negotiatedVersion);
+                        System.out.println("Server negotiating protocol: "
+                                + major + "." + minor);
 
                         /*
                          * Read the server random
@@ -523,6 +526,9 @@ public class TlsProtocolHandler
                                         pms,
                                         securityParameters.clientRandom,
                                         securityParameters.serverRandom);
+                        System.out.println("PMS: " + getHexString(pms));
+                        System.out.println("MS: " + getHexString(
+                                securityParameters.masterSecret));
 
                         // TODO Is there a way to ensure the data is really overwritten?
                         /*
@@ -572,7 +578,7 @@ public class TlsProtocolHandler
                         ByteArrayOutputStream bos = new ByteArrayOutputStream();
                         TlsUtils.writeUint8(HandshakeType.finished, bos);
                         TlsUtils.writeOpaque24(clientVerifyData, bos);
-                        byte[] message = bos.toByteArray();
+                        byte [] message = bos.toByteArray();
 
                         rs.writeMessage(ContentType.handshake, message, 0, message.length);
 
@@ -1248,6 +1254,8 @@ public class TlsProtocolHandler
                 clientVersion = enabledProtocols[i];
             }
         }
+        System.out.println("Client Version: " + clientVersion.getMajorVersion()
+                            + " " + clientVersion.getMinorVersion());
 
         // During the client hello, if we wish to be able to speak to
         // SSLv3 servers, then the record version should report SSLv3
@@ -1255,6 +1263,7 @@ public class TlsProtocolHandler
         // See RFC 2246 Appendix E
         if (allowSSLv3Downgrade()) {
             negotiatedVersion = TlsProtocolVersion.SSLv3;
+            System.out.println("Client negotiating SSLv3");
         } else {
             negotiatedVersion = clientVersion;
         }
@@ -1349,5 +1358,14 @@ public class TlsProtocolHandler
 
     public synchronized int getApplicationDataQueueSize() {
         return applicationDataQueue.size();
+    }
+
+    public static String getHexString(byte[] b) {
+        String result = "";
+        for (int i = 0; i < b.length; i++) {
+            result +=
+                    Integer.toString((b[i] & 0xff) + 0x100, 16).substring(1);
+        }
+        return result;
     }
 }
