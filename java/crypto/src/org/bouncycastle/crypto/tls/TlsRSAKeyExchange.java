@@ -88,6 +88,7 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         short[] types = certificateRequest.getCertificateTypes();
         for (int i = 0; i < types.length; ++i)
         {
+            System.out.println("Certificate Request Type: " + types[i]);
             switch (types[i])
             {
                 case ClientCertificateType.rsa_sign:

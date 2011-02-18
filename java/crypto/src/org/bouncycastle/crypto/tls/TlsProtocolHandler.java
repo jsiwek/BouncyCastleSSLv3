@@ -222,6 +222,7 @@ public class TlsProtocolHandler
                     {
                         // Parse the Certificate message and send to cipher suite
 
+                        System.out.println("Parsing/Verifying server cert.");
                         Certificate serverCertificate = Certificate.parse(is);
 
                         assertEmpty(is);
@@ -230,6 +231,7 @@ public class TlsProtocolHandler
 
                         this.authentication = tlsClient.getAuthentication();
                         this.authentication.notifyServerCertificate(serverCertificate);
+                        System.out.println("Server certificate verified");
 
                         break;
                     }
@@ -325,6 +327,8 @@ public class TlsProtocolHandler
                          * it was one of the offered ones.
                          */
                         int selectedCipherSuite = TlsUtils.readUint16(is);
+                        System.out.println("Server selected cipher suite: "
+                                           + selectedCipherSuite);
                         if (!arrayContains(offeredCipherSuites, selectedCipherSuite)
                             || selectedCipherSuite == CipherSuite.TLS_EMPTY_RENEGOTIATION_INFO_SCSV)
                         {
@@ -658,7 +662,9 @@ public class TlsProtocolHandler
 
                         this.certificateRequest = new CertificateRequest(certificateTypes,
                             authorityDNs);
+                        System.out.println("Validating Certificate Request");
                         this.keyExchange.validateCertificateRequest(this.certificateRequest);
+                        System.out.println("Validated Certificate Request");
 
                         break;
                     }
@@ -1255,7 +1261,7 @@ public class TlsProtocolHandler
             }
         }
         System.out.println("Client Version: " + clientVersion.getMajorVersion()
-                            + " " + clientVersion.getMinorVersion());
+                            + "." + clientVersion.getMinorVersion());
 
         // During the client hello, if we wish to be able to speak to
         // SSLv3 servers, then the record version should report SSLv3
@@ -1263,7 +1269,7 @@ public class TlsProtocolHandler
         // See RFC 2246 Appendix E
         if (allowSSLv3Downgrade()) {
             negotiatedVersion = TlsProtocolVersion.SSLv3;
-            System.out.println("Client negotiating SSLv3");
+            System.out.println("Client can negotiate SSLv3 (3.0)");
         } else {
             negotiatedVersion = clientVersion;
         }
