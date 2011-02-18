@@ -7,6 +7,9 @@
     |   |
     V   V
     master
+      |
+      V
+    debug
 
 # bccvs
 An unaltered version of the BouncyCastle CVS repository.
@@ -43,3 +46,6 @@ to allow it to be used in a GSSAPI implementation.
 
 # master
 Contains merged changes from the ssl3 and gss branches.
+
+# debug
+Includes extra debugging messages that get printed to stdout.
