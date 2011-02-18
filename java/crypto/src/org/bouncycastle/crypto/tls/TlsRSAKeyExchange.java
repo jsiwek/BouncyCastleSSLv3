@@ -88,15 +88,12 @@ class TlsRSAKeyExchange implements TlsKeyExchange
         short[] types = certificateRequest.getCertificateTypes();
         for (int i = 0; i < types.length; ++i)
         {
-            switch (types[i])
-            {
-                case ClientCertificateType.rsa_sign:
-                case ClientCertificateType.dss_sign:
-                case ClientCertificateType.ecdsa_sign:
-                    break;
-                default:
-                    throw new TlsFatalAlert(AlertDescription.illegal_parameter);
-            }
+            // It's left up the the TlsAuthentication implementation
+            // (maybe client specific) to decide whether it can satisfy
+            // one of the requested certificate types.  This just checks
+            // that the server sent a valid request according to the protocols.
+            if ( types[i] > 255 || types[i] < 0 )
+                throw new TlsFatalAlert(AlertDescription.illegal_parameter);
         }
     }
 
