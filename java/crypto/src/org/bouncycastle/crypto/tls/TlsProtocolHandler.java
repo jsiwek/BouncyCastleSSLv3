@@ -500,15 +500,23 @@ public class TlsProtocolHandler
                             if (clientCreds == null)
                             {
                                 this.keyExchange.skipClientCredentials();
-                                clientCert = Certificate.EMPTY_CHAIN;
+                                if (negotiatedVersion == TlsProtocolVersion.SSLv3)
+                                {
+                                    sendAlert(AlertLevel.warning,
+                                              AlertDescription.no_certificate);
+                                }
+                                else
+                                {
+                                    clientCert = Certificate.EMPTY_CHAIN;
+                                    sendClientCertificate(clientCert);
+                                }
                             }
                             else
                             {
                                 this.keyExchange.processClientCredentials(clientCreds);
                                 clientCert = clientCreds.getCertificate();
+                                sendClientCertificate(clientCert);
                             }
-
-                            sendClientCertificate(clientCert);
                         }
 
                         /*

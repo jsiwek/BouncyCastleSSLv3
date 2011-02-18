@@ -7,6 +7,9 @@
     |   |
     V   V
     master
+      |
+      V
+    debug
 
 # bccvs
 An unaltered version of the BouncyCastle CVS repository.
@@ -28,8 +31,8 @@ are listed below:
 - different pseudorandom functions
 - additional alert codes in TLS
 - [skip] TLS does not support Fortezza while SSLv3 does
-- [skip or TODO?] SSLv3 has additional client certificate types for
-  ephemeral Diffie Hellman scheme that TLS does not
+- SSLv3 has additional client certificate types for ephemeral Diffie Hellman
+  schemes (and Fortezza) that TLS does not
 - hashes calculated differently over the certificate verify handshake message
 - different calculation of the master secret
 - block cipher padding lengths. In SSLv3, the padding length is the
@@ -51,3 +54,6 @@ to allow it to be used in a GSSAPI implementation.
 
 # master
 Contains merged changes from the ssl3 and gss branches.
+
+# debug
+Includes extra debugging messages that get printed to stdout.
