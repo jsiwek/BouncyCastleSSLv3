@@ -17,6 +17,18 @@ public class MetaData
     private DERIA5String  mediaType;
     private Attributes otherMetaData;
 
+    public MetaData(
+        DERBoolean hashProtected,
+        DERUTF8String fileName,
+        DERIA5String mediaType,
+        Attributes otherMetaData)
+    {
+        this.hashProtected = hashProtected;
+        this.fileName = fileName;
+        this.mediaType = mediaType;
+        this.otherMetaData = otherMetaData;
+    }
+
     private MetaData(ASN1Sequence seq)
     {
         this.hashProtected = DERBoolean.getInstance(seq.getObjectAt(0));
@@ -48,7 +60,7 @@ public class MetaData
             return new MetaData(ASN1Sequence.getInstance(obj));
         }
 
-        throw new IllegalArgumentException("null object in factory");
+        return null;
     }
 
     /**
@@ -89,5 +101,20 @@ public class MetaData
     public boolean isHashProtected()
     {
         return hashProtected.isTrue();
+    }
+
+    public DERUTF8String getFileName()
+    {
+        return this.fileName;
+    }
+
+    public DERIA5String getMediaType()
+    {
+        return this.mediaType;
+    }
+
+    public Attributes getOtherMetaData()
+    {
+        return otherMetaData;
     }
 }
