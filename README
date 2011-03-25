@@ -12,14 +12,13 @@
     debug
 
 # bccvs
-An unaltered version of the BouncyCastle CVS repository.
-Originally checked out like:
+Contains BouncyCastle CVS repository of release 1.46.  Checked out like:
 
 export CVSROOT=:pserver:anonymous@cvs.bouncycastle.org:/home/users/bouncy/cvsroot
-cvs co java
+cvs co -r r1rv46 java
 
-It can be regularly updated (e.g. `cvs update`) and the changed merged
-downstream into ssl3 and gss branches.
+If desired, it can be regularly updated (e.g. `cvs update`)
+and the changes merged downstream into ssl3 and gss branches.
 
 # ssl3
 Contains changes to BouncyCastle's lightweight client TLS implementation

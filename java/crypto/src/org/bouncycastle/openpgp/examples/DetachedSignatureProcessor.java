@@ -1,29 +1,25 @@
 package org.bouncycastle.openpgp.examples;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
+import java.security.GeneralSecurityException;
 import java.security.Security;
-import java.security.SignatureException;
-import java.util.Iterator;
 
 import org.bouncycastle.bcpg.ArmoredOutputStream;
 import org.bouncycastle.bcpg.BCPGOutputStream;
-
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPCompressedData;
+import org.bouncycastle.openpgp.PGPException;
 import org.bouncycastle.openpgp.PGPObjectFactory;
 import org.bouncycastle.openpgp.PGPPrivateKey;
 import org.bouncycastle.openpgp.PGPPublicKey;
 import org.bouncycastle.openpgp.PGPPublicKeyRingCollection;
 import org.bouncycastle.openpgp.PGPSecretKey;
-import org.bouncycastle.openpgp.PGPSecretKeyRing;
-import org.bouncycastle.openpgp.PGPSecretKeyRingCollection;
 import org.bouncycastle.openpgp.PGPSignature;
 import org.bouncycastle.openpgp.PGPSignatureGenerator;
 import org.bouncycastle.openpgp.PGPSignatureList;
@@ -43,58 +39,21 @@ import org.bouncycastle.openpgp.PGPUtil;
  */
 public class DetachedSignatureProcessor
 {
-    /**
-     * A simple routine that opens a key ring file and loads the first available key suitable for
-     * signature generation.
-     * 
-     * @param in
-     * @return
-     * @throws IOException
-     * @throws PGPException
-     */
-    private static PGPSecretKey readSecretKey(
-        InputStream    in)
-        throws IOException, PGPException
+    private static void verifySignature(
+        String fileName,
+        String inputFileName,
+        String keyFileName)
+        throws GeneralSecurityException, IOException, PGPException
     {
-        in = PGPUtil.getDecoderStream(in);
-        
-        PGPSecretKeyRingCollection        pgpSec = new PGPSecretKeyRingCollection(in);
+        InputStream in = new BufferedInputStream(new FileInputStream(inputFileName));
+        InputStream keyIn = new BufferedInputStream(new FileInputStream(keyFileName));
 
-        //
-        // we just loop through the collection till we find a key suitable for encryption, in the real
-        // world you would probably want to be a bit smarter about this.
-        //
-        PGPSecretKey    key = null;
-        
-        //
-        // iterate through the key rings.
-        //
-        Iterator rIt = pgpSec.getKeyRings();
-        
-        while (key == null && rIt.hasNext())
-        {
-            PGPSecretKeyRing    kRing = (PGPSecretKeyRing)rIt.next();    
-            Iterator                        kIt = kRing.getSecretKeys();
-            
-            while (key == null && kIt.hasNext())
-            {
-                PGPSecretKey    k = (PGPSecretKey)kIt.next();
-                
-                if (k.isSigningKey())
-                {
-                    key = k;
-                }
-            }
-        }
-        
-        if (key == null)
-        {
-            throw new IllegalArgumentException("Can't find encryption key in key ring.");
-        }
-        
-        return key;
+        verifySignature(fileName, in, keyIn);
+
+        keyIn.close();
+        in.close();
     }
-    
+
     /**
      * verify the signature in in against the file fileName.
      */
@@ -102,7 +61,7 @@ public class DetachedSignatureProcessor
         String          fileName,
         InputStream     in,
         InputStream     keyIn)
-        throws Exception
+        throws GeneralSecurityException, IOException, PGPException
     {
         in = PGPUtil.getDecoderStream(in);
         
@@ -126,18 +85,20 @@ public class DetachedSignatureProcessor
         PGPPublicKeyRingCollection  pgpPubRingCollection = new PGPPublicKeyRingCollection(PGPUtil.getDecoderStream(keyIn));
 
 
-        InputStream                 dIn = new FileInputStream(fileName);
-        int                                     ch;
+        InputStream                 dIn = new BufferedInputStream(new FileInputStream(fileName));
 
         PGPSignature                sig = p3.get(0);
         PGPPublicKey                key = pgpPubRingCollection.getPublicKey(sig.getKeyID());
 
         sig.initVerify(key, "BC");
 
+        int ch;
         while ((ch = dIn.read()) >= 0)
         {
             sig.update((byte)ch);
         }
+
+        dIn.close();
 
         if (sig.verify())
         {
@@ -150,19 +111,36 @@ public class DetachedSignatureProcessor
     }
 
     private static void createSignature(
+        String  inputFileName,
+        String  keyFileName,
+        String  outputFileName,
+        char[]  pass,
+        boolean armor)
+        throws GeneralSecurityException, IOException, PGPException
+    {
+        InputStream keyIn = new BufferedInputStream(new FileInputStream(keyFileName));
+        OutputStream out = new BufferedOutputStream(new FileOutputStream(outputFileName));
+
+        createSignature(inputFileName, keyIn, out, pass, armor);
+
+        out.close();
+        keyIn.close();
+    }
+
+    private static void createSignature(
         String          fileName,
         InputStream     keyIn,
         OutputStream    out,
         char[]          pass,
         boolean         armor)
-        throws IOException, NoSuchAlgorithmException, NoSuchProviderException, PGPException, SignatureException
+        throws GeneralSecurityException, IOException, PGPException
     {    
         if (armor)
         {
             out = new ArmoredOutputStream(out);
         }
-        
-        PGPSecretKey             pgpSec = readSecretKey(keyIn);
+
+        PGPSecretKey             pgpSec = PGPExampleUtil.readSecretKey(keyIn);
         PGPPrivateKey            pgpPrivKey = pgpSec.extractPrivateKey(pass, "BC");        
         PGPSignatureGenerator    sGen = new PGPSignatureGenerator(pgpSec.getPublicKey().getAlgorithm(), PGPUtil.SHA1, "BC");
         
@@ -170,17 +148,22 @@ public class DetachedSignatureProcessor
         
         BCPGOutputStream         bOut = new BCPGOutputStream(out);
         
-        FileInputStream          fIn = new FileInputStream(fileName);
-        int                      ch = 0;
-        
+        InputStream              fIn = new BufferedInputStream(new FileInputStream(fileName));
+
+        int ch;
         while ((ch = fIn.read()) >= 0)
         {
             sGen.update((byte)ch);
         }
-        
+
+        fIn.close();
+
         sGen.generate().encode(bOut);
-        
-        out.close();
+
+        if (armor)
+        {
+            out.close();
+        }
     }
 
     public static void main(
@@ -193,25 +176,16 @@ public class DetachedSignatureProcessor
         {
             if (args[1].equals("-a"))
             {
-                FileInputStream     keyIn = new FileInputStream(args[3]);
-                FileOutputStream    out = new FileOutputStream(args[2] + ".asc");
-                
-                createSignature(args[2], keyIn, out, args[4].toCharArray(), true);
+                createSignature(args[2], args[3], args[2] + ".asc", args[4].toCharArray(), true);
             }
             else
             {
-                FileInputStream     keyIn = new FileInputStream(args[2]);
-                FileOutputStream    out = new FileOutputStream(args[1] + ".bpg");
-                
-                createSignature(args[1], keyIn, out, args[3].toCharArray(), false);
+                createSignature(args[1], args[2], args[1] + ".bpg", args[3].toCharArray(), false);
             }
         }
         else if (args[0].equals("-v"))
         {
-            FileInputStream    in = new FileInputStream(args[2]);
-            FileInputStream    keyIn = new FileInputStream(args[3]);
-            
-            verifySignature(args[1], in, keyIn);
+            verifySignature(args[1], args[2], args[3]);
         }
         else
         {

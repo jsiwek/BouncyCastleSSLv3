@@ -40,7 +40,6 @@ import org.bouncycastle.asn1.cms.SignedData;
 import org.bouncycastle.asn1.cms.SignerIdentifier;
 import org.bouncycastle.asn1.cms.SignerInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
-import org.bouncycastle.util.io.TeeOutputStream;
 
 /**
  * general class for generating a pkcs7-signature message.
@@ -111,8 +110,7 @@ public class CMSSignedDataGenerator
             CMSProcessable      content,
             SecureRandom        random,
             Provider            sigProvider,
-            boolean             addDefaultAttributes,
-            boolean             isCounterSignature)
+            boolean             addDefaultAttributes)
             throws IOException, SignatureException, InvalidKeyException, NoSuchAlgorithmException, CertificateEncodingException, CMSException
         {
             AlgorithmIdentifier digAlgId = getDigestAlgorithmID();
@@ -147,11 +145,14 @@ public class CMSSignedDataGenerator
             ASN1Set signedAttr = null;
             if (signed != null)
             {
-                if (isCounterSignature)
+                if (contentType == null) //counter signature
                 {
-                    Hashtable tmpSigned = signed.toHashtable();
-                    tmpSigned.remove(CMSAttributes.contentType);
-                    signed = new AttributeTable(tmpSigned);
+                    if (signed.get(CMSAttributes.contentType) != null)
+                    {
+                        Hashtable tmpSigned = signed.toHashtable();
+                        tmpSigned.remove(CMSAttributes.contentType);
+                        signed = new AttributeTable(tmpSigned);
+                    }
                 }
 
                 // TODO Validate proposed signed attributes
@@ -592,7 +593,7 @@ public class CMSSignedDataGenerator
         boolean isCounterSignature = (eContentType == null);
 
         ASN1ObjectIdentifier contentTypeOID = isCounterSignature
-            ?   CMSObjectIdentifiers.data
+            ?   null
             :   new ASN1ObjectIdentifier(eContentType);
 
         for (Iterator it = signerGens.iterator(); it.hasNext();)
@@ -615,22 +616,6 @@ public class CMSSignedDataGenerator
                 }
             }
 
-            if (isCounterSignature)
-            {
-                final CMSAttributeTableGenerator signedGen = sGen.getSignedAttributeTableGenerator();
-
-                sGen = new SignerInfoGenerator(sGen, new CMSAttributeTableGenerator()
-                {
-                    public AttributeTable getAttributes(Map parameters)
-                        throws CMSAttributeTableGenerationException
-                    {
-                        AttributeTable table = signedGen.getAttributes(parameters);
-
-                        return table.remove(CMSAttributes.contentType);
-                    }
-                }, sGen.getUnsignedAttributeTableGenerator());
-            }
-
             SignerInfo inf = sGen.generate(contentTypeOID);
 
             digestAlgs.add(inf.getDigestAlgorithm());
@@ -645,7 +630,7 @@ public class CMSSignedDataGenerator
             {
                 digestAlgs.add(signer.getDigestAlgorithmID());
                 signerInfos.add(signer.toSignerInfo(contentTypeOID, content, rand, sigProvider,
-                    addDefaultAttributes, isCounterSignature));
+                    addDefaultAttributes));
             }
             catch (IOException e)
             {
@@ -827,11 +812,7 @@ public class CMSSignedDataGenerator
         //
         // add the SignerInfo objects
         //
-        boolean isCounterSignature = (content.getContentType() == null);
-
-        ASN1ObjectIdentifier contentTypeOID = isCounterSignature
-            ?   CMSObjectIdentifiers.data
-            :   content.getContentType();
+        ASN1ObjectIdentifier contentTypeOID = content.getContentType();
 
         ASN1OctetString octs = null;
 
@@ -856,27 +837,17 @@ public class CMSSignedDataGenerator
 
         if (content != null)
         {
-            OutputStream cOut = null;
             ByteArrayOutputStream bOut = null;
 
             if (encapsulate)
             {
-                cOut = bOut = new ByteArrayOutputStream();
+                bOut = new ByteArrayOutputStream();
             }
 
-            for (Iterator it = signerGens.iterator(); it.hasNext();)
-            {
-                SignerInfoGenerator sGen = (SignerInfoGenerator)it.next();
+            OutputStream cOut = CMSUtils.attachSignersToOutputStream(signerGens, bOut);
 
-                if (cOut == null)
-                {
-                    cOut = sGen.getCalculatingOutputStream();
-                }
-                else
-                {
-                    cOut = new TeeOutputStream(cOut, sGen.getCalculatingOutputStream());
-                }
-            }
+            // Just in case it's unencapsulated and there are no signers!
+            cOut = CMSUtils.getSafeOutputStream(cOut);
 
             try
             {
@@ -898,24 +869,7 @@ public class CMSSignedDataGenerator
         for (Iterator it = signerGens.iterator(); it.hasNext();)
         {
             SignerInfoGenerator sGen = (SignerInfoGenerator)it.next();
-
-            if (isCounterSignature)
-            {
-                final CMSAttributeTableGenerator signedGen = sGen.getSignedAttributeTableGenerator();
-
-                sGen = new SignerInfoGenerator(sGen, new CMSAttributeTableGenerator()
-                {
-                    public AttributeTable getAttributes(Map parameters)
-                        throws CMSAttributeTableGenerationException
-                    {
-                        AttributeTable table = signedGen.getAttributes(parameters);
-
-                        return table.remove(CMSAttributes.contentType);
-                    }
-                }, sGen.getUnsignedAttributeTableGenerator());
-            }
-
-            SignerInfo inf = sGen.generate(new ASN1ObjectIdentifier(contentTypeOID.getId()));
+            SignerInfo inf = sGen.generate(contentTypeOID);
 
             digestAlgs.add(inf.getDigestAlgorithm());
             signerInfos.add(inf);

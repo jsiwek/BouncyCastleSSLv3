@@ -1,8 +1,5 @@
 package org.bouncycastle.asn1.esf;
 
-import java.text.ParseException;
-import java.util.Date;
-
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -22,7 +19,6 @@ import org.bouncycastle.asn1.ocsp.ResponderID;
 public class OcspIdentifier
     extends ASN1Encodable
 {
-
     private ResponderID ocspResponderID;
     private DERGeneralizedTime producedAt;
 
@@ -51,10 +47,10 @@ public class OcspIdentifier
         this.producedAt = (DERGeneralizedTime)seq.getObjectAt(1);
     }
 
-    public OcspIdentifier(ResponderID ocspResponderID, Date producedAt)
+    public OcspIdentifier(ResponderID ocspResponderID, DERGeneralizedTime producedAt)
     {
         this.ocspResponderID = ocspResponderID;
-        this.producedAt = new DERGeneralizedTime(producedAt);
+        this.producedAt = producedAt;
     }
 
     public ResponderID getOcspResponderID()
@@ -62,17 +58,9 @@ public class OcspIdentifier
         return this.ocspResponderID;
     }
 
-    public Date getProducedAt()
+    public DERGeneralizedTime getProducedAt()
     {
-        try
-        {
-            return this.producedAt.getDate();
-        }
-        catch (ParseException e)
-        {
-            throw new IllegalStateException("date parse error: "
-                + e.getMessage());
-        }
+        return this.producedAt;
     }
 
     public DERObject toASN1Object()
