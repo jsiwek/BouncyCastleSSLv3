@@ -45,8 +45,8 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.DigestInfo;
 import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.operator.ContentVerifier;
-import org.bouncycastle.operator.ContentVerifierProvider;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.DigestCalculator;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.RawContentVerifier;
 import org.bouncycastle.operator.SignatureAlgorithmIdentifierFinder;
@@ -73,6 +73,7 @@ public class SignerInformation
     // Derived
     private AttributeTable          signedAttributeValues;
     private AttributeTable          unsignedAttributeValues;
+    private boolean                 isCounterSignature;
 
     SignerInformation(
         SignerInfo          info,
@@ -84,6 +85,7 @@ public class SignerInformation
         this.info = info;
         this.contentType = contentType;
         this.sigAlgFinder = sigAlgFinder;
+        this.isCounterSignature = contentType == null;
 
         SignerIdentifier   s = info.getSID();
 
@@ -108,6 +110,11 @@ public class SignerInformation
 
         this.content = content;
         this.digestCalculator = digestCalculator;
+    }
+
+    public boolean isCounterSignature()
+    {
+        return isCounterSignature;
     }
 
     public ASN1ObjectIdentifier getContentType()
@@ -304,7 +311,7 @@ public class SignerInformation
 
                 String          digestName = CMSSignedHelper.INSTANCE.getDigestAlgName(si.getDigestAlgorithm().getObjectId().getId());
                 
-                counterSignatures.add(new SignerInformation(si, CMSAttributes.counterSignature, null, new CounterSignatureDigestCalculator(digestName, null, getSignature()), new DefaultSignatureAlgorithmIdentifierFinder()));
+                counterSignatures.add(new SignerInformation(si, null, null, new CounterSignatureDigestCalculator(digestName, null, getSignature()), new DefaultSignatureAlgorithmIdentifierFinder()));
             }
         }
 
@@ -412,10 +419,6 @@ public class SignerInformation
         {
             throw new CMSException("can't process mime object to create signature.", e);
         }
-
-        // TODO Shouldn't be using attribute OID as contentType (should be null)
-        boolean isCounterSignature = contentType.equals(
-            CMSAttributes.counterSignature);
 
         // RFC 3852 11.1 Check the content-type attribute is correct
         {
@@ -541,25 +544,29 @@ public class SignerInformation
     }
 
     private boolean doVerify(
-        ContentVerifier verifier)
+        SignerInformationVerifier verifier)
         throws CMSException
     {
         String          digestName = CMSSignedHelper.INSTANCE.getDigestAlgName(this.getDigestAlgOID());
         String          encName = CMSSignedHelper.INSTANCE.getEncryptionAlgName(this.getEncryptionAlgOID());
+        String          signatureName = digestName + "with" + encName;
 
         try
         {
-            MessageDigest   digest = CMSSignedHelper.INSTANCE.getDigestInstance(digestName, null);
-
             if (digestCalculator != null)
             {
                 resultDigest = digestCalculator.getDigest();
             }
             else
             {
+                DigestCalculator calc = verifier.getDigestCalculator(this.getDigestAlgorithmID());
                 if (content != null)
                 {
-                    content.write(new DigOutputStream(digest));
+                    OutputStream      digOut = calc.getOutputStream();
+
+                    content.write(digOut);
+
+                    digOut.close();
                 }
                 else if (signedAttributeSet == null)
                 {
@@ -567,7 +574,7 @@ public class SignerInformation
                     throw new CMSException("data not encapsulated in signature - use detached constructor.");
                 }
 
-                resultDigest = digest.digest();
+                resultDigest = calc.getDigest();
             }
         }
         catch (IOException e)
@@ -578,9 +585,10 @@ public class SignerInformation
         {
             throw new CMSException("can't find algorithm: " + e.getMessage(), e);
         }
-
-        // TODO Shouldn't be using attribute OID as contentType (should be null)
-        boolean isCounterSignature = contentType.equals(CMSAttributes.counterSignature);
+        catch (OperatorCreationException e)
+        {
+            throw new CMSException("can't create digest calculator: " + e.getMessage(), e);
+        }
 
         // RFC 3852 11.1 Check the content-type attribute is correct
         {
@@ -669,15 +677,16 @@ public class SignerInformation
 
         try
         {
-            OutputStream sigOut = verifier.getOutputStream();
+            ContentVerifier contentVerifier = verifier.getContentVerifier(sigAlgFinder.find(signatureName));
+            OutputStream sigOut = contentVerifier.getOutputStream();
 
             if (signedAttributeSet == null)
             {
                 if (digestCalculator != null)
                 {
-                    if (verifier instanceof RawContentVerifier)
+                    if (contentVerifier instanceof RawContentVerifier)
                     {           
-                        RawContentVerifier rawVerifier = (RawContentVerifier)verifier;
+                        RawContentVerifier rawVerifier = (RawContentVerifier)contentVerifier;
 
                         if (encName.equals("RSA"))
                         {
@@ -704,11 +713,15 @@ public class SignerInformation
 
             sigOut.close();
 
-            return verifier.verify(this.getSignature());
+            return contentVerifier.verify(this.getSignature());
         }
         catch (IOException e)
         {
             throw new CMSException("can't process mime object to create signature.", e);
+        }
+        catch (OperatorCreationException e)
+        {
+            throw new CMSException("can't create content verifier: " + e.getMessage(), e);
         }
     }
 
@@ -927,43 +940,33 @@ public class SignerInformation
     }
 
     /**
-     * Verify that the given verifierProvider can successfully verify the signature on
+     * Verify that the given verifier can successfully verify the signature on
      * this SignerInformation object.
      *
+     * @param verifier a suitably configured SignerInformationVerifier.
      * @return true if the signer information is verified, false otherwise.
-     * @throws CMSVerifierCertificateNotValidException if the provider has an associated certificate and the certificate is not valid at the time given as the SignerInfo's signing time.
-     * @throws CMSException if the VerifierProvider is unable to create a verifier.
+     * @throws org.bouncycastle.cms.CMSVerifierCertificateNotValidException if the provider has an associated certificate and the certificate is not valid at the time given as the SignerInfo's signing time.
+     * @throws org.bouncycastle.cms.CMSException if the verifier is unable to create a ContentVerifiers or DigestCalculators.
      */
-    public boolean verify(ContentVerifierProvider verifierProvider)
+    public boolean verify(SignerInformationVerifier verifier)
         throws CMSException
     {
-        String          digestName = CMSSignedHelper.INSTANCE.getDigestAlgName(this.getDigestAlgOID());
-        String          encName = CMSSignedHelper.INSTANCE.getEncryptionAlgName(this.getEncryptionAlgOID());
-        String          signatureName = digestName + "with" + encName;
+        Time signingTime = getSigningTime();   // has to be validated if present.
 
-        try
+        if (verifier.hasAssociatedCertificate())
         {
-            Time signingTime = getSigningTime();   // has to be validated if present.
-
-            if (verifierProvider.hasAssociatedCertificate())
+            if (signingTime != null)
             {
-                if (signingTime != null)
-                {
-                    X509CertificateHolder dcv = verifierProvider.getAssociatedCertificate();
+                X509CertificateHolder dcv = verifier.getAssociatedCertificate();
 
-                    if (!dcv.isValidOn(signingTime.getDate()))
-                    {
-                        throw new CMSVerifierCertificateNotValidException("verifier not valid at signingTime");
-                    }
+                if (!dcv.isValidOn(signingTime.getDate()))
+                {
+                    throw new CMSVerifierCertificateNotValidException("verifier not valid at signingTime");
                 }
             }
+        }
 
-            return doVerify(verifierProvider.get(sigAlgFinder.find(signatureName)));
-        }
-        catch (OperatorCreationException e)
-        {
-            throw new CMSException("cannot create verifier: " + e.getMessage(), e);
-        }
+        return doVerify(verifier);
     }
 
     /**

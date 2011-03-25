@@ -27,7 +27,6 @@ public class TimeStampedData
         this.temporalEvidence = temporalEvidence;
     }
 
-
     private TimeStampedData(ASN1Sequence seq)
     {
         this.version = DERInteger.getInstance(seq.getObjectAt(0));
@@ -59,7 +58,7 @@ public class TimeStampedData
             return new TimeStampedData(ASN1Sequence.getInstance(obj));
         }
 
-        throw new IllegalArgumentException("null object in factory");
+        return null;
     }
 
     public DERIA5String getDataUri()
@@ -81,7 +80,6 @@ public class TimeStampedData
     {
         return temporalEvidence;
     }
-
 
     /**
      * <pre>

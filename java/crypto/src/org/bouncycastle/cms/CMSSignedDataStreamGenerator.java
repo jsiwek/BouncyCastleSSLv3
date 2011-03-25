@@ -14,6 +14,7 @@ import java.security.SignatureException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -31,12 +32,12 @@ import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.cms.AttributeTable;
+import org.bouncycastle.asn1.cms.CMSAttributes;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.cms.SignerIdentifier;
 import org.bouncycastle.asn1.cms.SignerInfo;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.DigestInfo;
-import org.bouncycastle.util.io.TeeOutputStream;
 
 /**
  * General class for generating a pkcs7-signature message stream.
@@ -44,12 +45,20 @@ import org.bouncycastle.util.io.TeeOutputStream;
  * A simple example of usage.
  * </p>
  * <pre>
- *      CertStore                    certs...
+ *      X509Certificate signCert = ...
+ *      certList.add(signCert);
+ *
+ *      Store           certs = new JcaCertStore(certList);
+ *      ContentSigner sha1Signer = new JcaContentSignerBuilder("SHA1withRSA").setProvider("BC").build(signKP.getPrivate());
+ *
  *      CMSSignedDataStreamGenerator gen = new CMSSignedDataStreamGenerator();
  *  
- *      gen.addSigner(privateKey, cert, CMSSignedDataStreamGenerator.DIGEST_SHA1, "BC");
- *  
- *      gen.addCertificatesAndCRLs(certs);
+ *      gen.addSignerInfoGenerator(
+ *                new JcaSignerInfoGeneratorBuilder(
+ *                     new JcaDigestCalculatorProviderBuilder().setProvider("BC").build())
+ *                     .build(sha1Signer, signCert));
+ *
+ *      gen.addCertificates(certs);
  *  
  *      OutputStream sigOut = gen.open(bOut);
  *  
@@ -130,7 +139,7 @@ public class CMSSignedDataStreamGenerator
                     _sig = CMSSignedHelper.INSTANCE.getSignatureInstance("NONEwithDSA", sigProvider);
                 }
                 // TODO Add support for raw PSS
-//                else if (_encName("RSAandMGF1"))
+//                else if (_encName.equals("RSAandMGF1"))
 //                {
 //                    sig = CMSSignedHelper.INSTANCE.getSignatureInstance("NONEWITHRSAPSS", _sigProvider);
 //                    try
@@ -175,9 +184,17 @@ public class CMSSignedDataStreamGenerator
                 {
                     Map parameters = getBaseParameters(contentType, digestAlgorithm, calculatedDigest);
                     AttributeTable signed = _sAttr.getAttributes(Collections.unmodifiableMap(parameters));
-    
-                    // TODO Handle countersignatures (see CMSSignedDataGenerator)
-    
+
+                    if (contentType == null) //counter signature
+                    {
+                        if (signed != null && signed.get(CMSAttributes.contentType) != null)
+                        {
+                            Hashtable tmpSigned = signed.toHashtable();
+                            tmpSigned.remove(CMSAttributes.contentType);
+                            signed = new AttributeTable(tmpSigned);
+                        }
+                    }
+                    
                     signedAttr = getAttributeSet(signed);
     
                     // sig must be composed from the DER encoding.
@@ -734,7 +751,7 @@ public class CMSSignedDataStreamGenerator
         boolean      encapsulate)
         throws IOException
     {
-        return open(out, DATA, encapsulate);
+        return open(CMSObjectIdentifiers.data, out, encapsulate);
     }
 
     /**
@@ -753,14 +770,11 @@ public class CMSSignedDataStreamGenerator
         OutputStream dataOutputStream)
         throws IOException
     {
-        return open(out, DATA, encapsulate, dataOutputStream);
+        return open(CMSObjectIdentifiers.data, out, encapsulate, dataOutputStream);
     }
 
     /**
-     * generate a signed object that for a CMS Signed Data
-     * object using the given provider - if encapsulate is true a copy
-     * of the message will be included in the signature. The content type
-     * is set according to the OID represented by the string signedContentType.
+     * @deprecated use open(ASN1ObjectIdentifier, OutputStream, boolean)
      */
     public OutputStream open(
         OutputStream out,
@@ -776,15 +790,43 @@ public class CMSSignedDataStreamGenerator
      * object using the given provider - if encapsulate is true a copy
      * of the message will be included in the signature. The content type
      * is set according to the OID represented by the string signedContentType.
-     * @param out stream the CMS object is to be written to.
+     */
+    public OutputStream open(
+        ASN1ObjectIdentifier eContentType,
+        OutputStream out,
+        boolean encapsulate)
+        throws IOException
+    {
+        return open(eContentType, out, encapsulate, null);
+    }
+
+    /**
+     * @deprecated use open(ASN1ObjectIdenfier, OutputStream, boolean, OutputStream)
+     */
+    public OutputStream open(
+        OutputStream out,
+        String eContentType,
+        boolean      encapsulate,
+        OutputStream dataOutputStream)
+        throws IOException
+    {
+        return open(new ASN1ObjectIdentifier(eContentType), out, encapsulate, dataOutputStream);
+    }
+
+    /**
+     * generate a signed object that for a CMS Signed Data
+     * object using the given provider - if encapsulate is true a copy
+     * of the message will be included in the signature. The content type
+     * is set according to the OID represented by the string signedContentType.
      * @param eContentType OID for data to be signed.
+     * @param out stream the CMS object is to be written to.
      * @param encapsulate true if data should be encapsulated.
      * @param dataOutputStream output stream to copy the data being signed to.
      */
     public OutputStream open(
+        ASN1ObjectIdentifier eContentType,
         OutputStream out,
-        String       eContentType,
-        boolean      encapsulate,
+        boolean encapsulate,
         OutputStream dataOutputStream)
         throws IOException
     {
@@ -862,7 +904,7 @@ public class CMSSignedDataStreamGenerator
         sigGen.getRawOutputStream().write(new DERSet(digestAlgs).getEncoded());
         
         BERSequenceGenerator eiGen = new BERSequenceGenerator(sigGen.getRawOutputStream());
-        eiGen.addObject(new DERObjectIdentifier(eContentType));
+        eiGen.addObject(eContentType);
 
         // If encapsulating, add the data as an octet string in the sequence
         OutputStream encapStream = encapsulate
@@ -870,19 +912,15 @@ public class CMSSignedDataStreamGenerator
             : null;
 
         // Also send the data to 'dataOutputStream' if necessary
-        OutputStream contentStream = getSafeTeeOutputStream(dataOutputStream, encapStream);
+        OutputStream contentStream = CMSUtils.getSafeTeeOutputStream(dataOutputStream, encapStream);
 
         // Let all the digests see the data as it is written
-        OutputStream digStream = attachDigestsToOutputStream(_messageDigests, contentStream);
+        OutputStream digStream = CMSUtils.attachDigestsToOutputStream(_messageDigests, contentStream);
 
-        for (Iterator it = signerGens.iterator(); it.hasNext();)
-        {
-            SignerInfoGenerator signerGen = (SignerInfoGenerator)it.next();
+        // Let all the signers see the data as it is written
+        OutputStream sigStream = CMSUtils.attachSignersToOutputStream(signerGens, digStream);
 
-            digStream = new TeeOutputStream(digStream, signerGen.getCalculatingOutputStream());
-        }
-        
-        return new CmsSignedDataOutputStream(digStream, eContentType, sGen, sigGen, eiGen);
+        return new CmsSignedDataOutputStream(sigStream, eContentType, sGen, sigGen, eiGen);
     }
 
     // TODO Make public?
@@ -921,7 +959,7 @@ public class CMSSignedDataStreamGenerator
     //       ELSE version MUST be 1
     //
     private DERInteger calculateVersion(
-        String contentOid)
+        ASN1ObjectIdentifier contentOid)
     {
         boolean otherCert = false;
         boolean otherCrl = false;
@@ -958,7 +996,7 @@ public class CMSSignedDataStreamGenerator
             return new DERInteger(5);
         }
 
-        if (crls != null && !otherCert)         // no need to check if otherCert is true
+        if (crls != null)         // no need to check if otherCert is true
         {
             for (Iterator it = crls.iterator(); it.hasNext();)
             {
@@ -985,21 +1023,17 @@ public class CMSSignedDataStreamGenerator
             return new DERInteger(3);
         }
 
-        if (contentOid.equals(DATA))
-        {
-            if (checkForVersion3(_signers))
-            {
-                return new DERInteger(3);
-            }
-            else
-            {
-                return new DERInteger(1);
-            }
-        }
-        else
+        if (checkForVersion3(_signers))
         {
             return new DERInteger(3);
         }
+
+        if (!CMSObjectIdentifiers.data.equals(contentOid))
+        {
+            return new DERInteger(3);
+        }
+
+        return new DERInteger(1);
     }
 
     private boolean checkForVersion3(List signerInfos)
@@ -1017,31 +1051,6 @@ public class CMSSignedDataStreamGenerator
         return false;
     }
 
-    private static OutputStream attachDigestsToOutputStream(List digests, OutputStream s)
-    {
-        OutputStream result = s;
-        Iterator it = digests.iterator();
-        while (it.hasNext())
-        {
-            MessageDigest digest = (MessageDigest)it.next();
-            result = getSafeTeeOutputStream(result, new DigOutputStream(digest));
-        }
-        return result;
-    }
-
-    private static OutputStream getSafeOutputStream(OutputStream s)
-    {
-        return s == null ? new NullOutputStream() : s;
-    }
-
-    private static OutputStream getSafeTeeOutputStream(OutputStream s1,
-            OutputStream s2)
-    {
-        return s1 == null ? getSafeOutputStream(s2)
-                : s2 == null ? getSafeOutputStream(s1) : new TeeOutputStream(
-                        s1, s2);
-    }
-
     private class CmsSignedDataOutputStream
         extends OutputStream
     {
@@ -1053,13 +1062,13 @@ public class CMSSignedDataStreamGenerator
 
         public CmsSignedDataOutputStream(
             OutputStream         out,
-            String               contentOID,
+            ASN1ObjectIdentifier contentOID,
             BERSequenceGenerator sGen,
             BERSequenceGenerator sigGen,
             BERSequenceGenerator eiGen)
         {
             _out = out;
-            _contentOID = new ASN1ObjectIdentifier(contentOID);
+            _contentOID = contentOID;
             _sGen = sGen;
             _sigGen = sigGen;
             _eiGen = eiGen;

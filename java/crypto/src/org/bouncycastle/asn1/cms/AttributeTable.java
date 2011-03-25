@@ -43,6 +43,12 @@ public class AttributeTable
         }
     }
 
+    public AttributeTable(
+        Attributes    attrs)
+    {
+        this(ASN1Set.getInstance(attrs.getDERObject()));
+    }
+
     private void addAttribute(
         DERObjectIdentifier oid,
         Attribute           a)
@@ -124,7 +130,28 @@ public class AttributeTable
         
         return v;
     }
-    
+
+    public int size()
+    {
+        int size = 0;
+
+        for (Enumeration en = attributes.elements(); en.hasMoreElements();)
+        {
+            Object o = en.nextElement();
+
+            if (o instanceof Vector)
+            {
+                size += ((Vector)o).size();
+            }
+            else
+            {
+                size++;
+            }
+        }
+
+        return size;
+    }
+
     public Hashtable toHashtable()
     {
         return copyTable(attributes);
@@ -156,7 +183,12 @@ public class AttributeTable
         
         return v;
     }
-    
+
+    public Attributes toAttributes()
+    {
+        return new Attributes(this.toASN1EncodableVector());
+    }
+
     private Hashtable copyTable(
         Hashtable in)
     {
