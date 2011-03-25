@@ -10,6 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.util.HashMap;
 import java.util.Iterator;
 
 import javax.crypto.Cipher;
@@ -20,10 +21,13 @@ import javax.crypto.SecretKey;
 
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1Set;
 import org.bouncycastle.asn1.BERSequenceGenerator;
 import org.bouncycastle.asn1.BERSet;
 import org.bouncycastle.asn1.DERInteger;
 import org.bouncycastle.asn1.DERSet;
+import org.bouncycastle.asn1.DERTaggedObject;
+import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.operator.GenericKey;
@@ -36,12 +40,13 @@ import org.bouncycastle.operator.OutputEncryptor;
  * <pre>
  *      CMSEnvelopedDataStreamGenerator edGen = new CMSEnvelopedDataStreamGenerator();
  *
- *      edGen.addKeyTransRecipient(cert);
+ *      edGen.addRecipientInfoGenerator(new JceKeyTransRecipientInfoGenerator(recipientCert).setProvider("BC"));
  *
  *      ByteArrayOutputStream  bOut = new ByteArrayOutputStream();
  *      
  *      OutputStream out = edGen.open(
- *                              bOut, CMSEnvelopedDataGenerator.AES128_CBC, "BC");*
+ *                              bOut, new JceCMSContentEncryptorBuilder(CMSAlgorithm.DES_EDE3_CBC)
+ *                                              .setProvider("BC").build());
  *      out.write(data);
  *      
  *      out.close();
@@ -82,7 +87,7 @@ public class CMSEnvelopedDataStreamGenerator
     {
         _bufferSize = bufferSize;
     }
-    
+
     /**
      * Use a BER Set to store the recipient information
      */
@@ -501,8 +506,15 @@ public class CMSEnvelopedDataStreamGenerator
         {
             _out.close();
             _eiGen.close();
-            
-            // [TODO] unprotected attributes go here
+
+            if (unprotectedAttributeGenerator != null)
+            {
+                AttributeTable attrTable = unprotectedAttributeGenerator.getAttributes(new HashMap());
+      
+                ASN1Set unprotectedAttrs = new BERSet(attrTable.toASN1EncodableVector());
+
+                _envGen.addObject(new DERTaggedObject(false, 1, unprotectedAttrs));
+            }
     
             _envGen.close();
             _cGen.close();

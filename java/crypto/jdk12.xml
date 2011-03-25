@@ -10,7 +10,7 @@
 
   $RCSfile: jdk12.xml,v $
   $Author: bouncy $
-  $Date: 2005/07/06 13:02:52 $
+  $Date: 2005-07-06 13:02:52 $
   $Revision: 1.1.1.1 $
 -->
 <project name="jdk12" default="init" basedir=".">

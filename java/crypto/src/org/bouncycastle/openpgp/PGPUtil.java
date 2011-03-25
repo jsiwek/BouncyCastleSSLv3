@@ -330,8 +330,8 @@ public class PGPUtil
         {
             if (s2k != null)
             {     
-                String digestName = getS2kDigestName(s2k);
-                
+                String digestName = getDigestName(s2k.getHashAlgorithm());
+
                 try
                 {
                     digest = getDigestInstance(digestName, provider);
@@ -452,29 +452,6 @@ public class PGPUtil
         }
     }
 
-    private static String getS2kDigestName(S2K s2k) throws PGPException
-    {
-        switch (s2k.getHashAlgorithm())
-        {
-        case HashAlgorithmTags.MD5:
-            return "MD5";
-        case HashAlgorithmTags.RIPEMD160:
-            return "RIPEMD160";
-        case HashAlgorithmTags.SHA1:
-            return "SHA1";
-        case HashAlgorithmTags.SHA224:
-            return "SHA224";
-        case HashAlgorithmTags.SHA256:
-            return "SHA256";
-        case HashAlgorithmTags.SHA384:
-            return "SHA384";
-        case HashAlgorithmTags.SHA512:
-            return "SHA512";
-        default:
-            throw new PGPException("unknown hash algorithm: " + s2k.getHashAlgorithm());
-        }
-    }
-    
     /**
      * write out the passed in file as a literal data packet.
      * 
@@ -491,18 +468,8 @@ public class PGPUtil
         throws IOException
     {
         PGPLiteralDataGenerator lData = new PGPLiteralDataGenerator();
-        OutputStream            pOut = lData.open(out, fileType, file.getName(), file.length(), new Date(file.lastModified()));
-        FileInputStream         in = new FileInputStream(file);
-        byte[]                  buf = new byte[4096];
-        int                     len;
-        
-        while ((len = in.read(buf)) > 0)
-        {
-            pOut.write(buf, 0, len);
-        }
-        
-        lData.close();
-        in.close();
+        OutputStream pOut = lData.open(out, fileType, file.getName(), file.length(), new Date(file.lastModified()));
+        pipeFileContents(file, pOut, 4096);
     }
     
     /**
@@ -523,20 +490,25 @@ public class PGPUtil
         throws IOException
     {
         PGPLiteralDataGenerator lData = new PGPLiteralDataGenerator();
-        OutputStream            pOut = lData.open(out, fileType, file.getName(), new Date(file.lastModified()), buffer);
-        FileInputStream         in = new FileInputStream(file);
-        byte[]                  buf = new byte[buffer.length];
-        int                     len;
-        
+        OutputStream pOut = lData.open(out, fileType, file.getName(), new Date(file.lastModified()), buffer);
+        pipeFileContents(file, pOut, buffer.length);
+    }
+
+    private static void pipeFileContents(File file, OutputStream pOut, int bufSize) throws IOException
+    {
+        FileInputStream in = new FileInputStream(file);
+        byte[] buf = new byte[bufSize];
+
+        int len;
         while ((len = in.read(buf)) > 0)
         {
             pOut.write(buf, 0, len);
         }
-        
-        lData.close();
+
+        pOut.close();
         in.close();
     }
-    
+
     private static final int READ_AHEAD = 60;
     
     private static boolean isPossiblyBase64(
