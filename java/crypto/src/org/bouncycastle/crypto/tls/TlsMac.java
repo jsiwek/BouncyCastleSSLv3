@@ -14,7 +14,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 public class TlsMac
 {
     protected long seqNo;
-    protected  byte[] secret;
+    protected byte[] secret;
     protected HMac mac;
 
     /**
